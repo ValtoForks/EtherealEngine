@@ -44,7 +44,7 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	camera_component& set_fov(float fovDegrees);
+	void set_fov(float fovDegrees);
 
 	//-----------------------------------------------------------------------------
 	//  Name : set_near_clip ()
@@ -54,7 +54,7 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	camera_component& set_near_clip(float distance);
+	void set_near_clip(float distance);
 
 	//-----------------------------------------------------------------------------
 	//  Name : set_far_clip ()
@@ -64,7 +64,7 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	camera_component& set_far_clip(float distance);
+	void set_far_clip(float distance);
 
 	//-----------------------------------------------------------------------------
 	//  Name : set_projection_mode ()
@@ -74,7 +74,7 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	camera_component& set_projection_mode(projection_mode mode);
+	void set_projection_mode(projection_mode mode);
 
 	//-----------------------------------------------------------------------------
 	//  Name : get_fov ()
@@ -126,7 +126,7 @@ public:
 	//-----------------------------------------------------------------------------
 	inline camera& get_camera()
 	{
-		return _camera;
+		return camera_;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -139,7 +139,7 @@ public:
 	//-----------------------------------------------------------------------------
 	inline const camera& get_camera() const
 	{
-		return _camera;
+		return camera_;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -180,7 +180,7 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	void set_viewport_size(const usize& size);
+	void set_viewport_size(const usize32_t& size);
 
 	//-----------------------------------------------------------------------------
 	//  Name : get_viewport_size ()
@@ -190,7 +190,7 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	const usize& get_viewport_size() const;
+	const usize32_t& get_viewport_size() const;
 
 	//-----------------------------------------------------------------------------
 	//  Name : get_ortho_size ()
@@ -232,7 +232,7 @@ public:
 	//-----------------------------------------------------------------------------
 	inline gfx::render_view& get_render_view()
 	{
-		return _render_view;
+		return render_view_;
 	}
 
 private:
@@ -240,9 +240,9 @@ private:
 	// Private Member Variables.
 	//-------------------------------------------------------------------------
 	/// The camera object this component represents
-	camera _camera;
+	camera camera_;
 	/// The render view for this component
-	gfx::render_view _render_view;
+	gfx::render_view render_view_;
 	/// Is the camera HDR?
-	bool _hdr = true;
+	bool hdr_ = true;
 };

@@ -14,8 +14,8 @@ class syncer
 public:
 	using rename_pair_t = std::pair<fs::path, fs::path>;
 
-	using on_entry_created_t = std::function<void(const fs::path&, const std::vector<fs::path>&)>;
-	using on_entry_modified_t = std::function<void(const fs::path&, const std::vector<fs::path>&)>;
+	using on_entry_created_t = std::function<void(const fs::path&, const std::vector<fs::path>&, bool)>;
+	using on_entry_modified_t = std::function<void(const fs::path&, const std::vector<fs::path>&, bool)>;
 	using on_entry_removed_t = std::function<void(const fs::path&, const std::vector<fs::path>&)>;
 	using on_entry_renamed_t = std::function<void(const rename_pair_t&, const std::vector<rename_pair_t>&)>;
 
@@ -97,15 +97,15 @@ private:
 	fs::path get_watch_path();
 
 	/// Mutex for locking the data of this class.
-	std::mutex _mutex;
+	std::mutex mutex_;
 	/// Mappings of all remapped extensions.
-	mapping_t _mapping;
+	mapping_t mapping_;
 	/// Reference directory to be watched.
-	fs::path _reference_dir;
+	fs::path reference_dir_;
 	/// Directory to be synced with the reference one.
-	fs::path _synced_dir;
+	fs::path synced_dir_;
 
-	std::atomic<std::uint64_t> _watch_id = {0};
+	std::atomic<std::uint64_t> watch_id_ = {0};
 };
 
 //////////////////////////////////////////////////////////////////////

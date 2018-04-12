@@ -65,25 +65,27 @@ static ALenum get_format_for_channels(std::uint32_t channels, std::uint32_t byte
 sound_impl::sound_impl(std::vector<std::uint8_t>&& buffer, const sound_info& info)
 {
 	if(buffer.empty())
+	{
 		return;
+	}
 
 	ALenum format = detail::get_format_for_channels(info.channels, info.bytes_per_sample);
 
-	al_check(alGenBuffers(1, &_handle));
-	al_check(alBufferData(_handle, format, buffer.data(), ALsizei(buffer.size()), ALsizei(info.sample_rate)));
+	al_check(alGenBuffers(1, &handle_));
+	al_check(alBufferData(handle_, format, buffer.data(), ALsizei(buffer.size()), ALsizei(info.sample_rate)));
 
 	buffer.clear();
 }
 
 sound_impl::sound_impl(sound_impl&& rhs)
-	: _handle(std::move(rhs._handle))
+	: handle_(std::move(rhs.handle_))
 {
 	rhs.cleanup();
 }
 
 sound_impl& sound_impl::operator=(sound_impl&& rhs)
 {
-	_handle = std::move(rhs._handle);
+	handle_ = std::move(rhs.handle_);
 	rhs.cleanup();
 
 	return *this;
@@ -95,52 +97,56 @@ sound_impl::~sound_impl()
 {
 	unbind_from_all_sources();
 
-	if(_handle)
+	if(handle_ != 0u)
 	{
-		al_check(alDeleteBuffers(1, &_handle));
+		al_check(alDeleteBuffers(1, &handle_));
 	}
 }
 
 bool sound_impl::is_valid() const
 {
-	return _handle != 0;
+	return handle_ != 0;
 }
 
 sound_impl::native_handle_type sound_impl::native_handle() const
 {
-	return _handle;
+	return handle_;
 }
 
 void sound_impl::bind_to_source(source_impl* source)
 {
-	std::lock_guard<std::mutex> lock(_mutex);
-	_bound_to_sources.push_back(source);
+	std::lock_guard<std::mutex> lock(mutex_);
+	bound_to_sources_.push_back(source);
 }
 
 void sound_impl::unbind_from_source(source_impl* source)
 {
-	std::lock_guard<std::mutex> lock(_mutex);
-	_bound_to_sources.erase(std::remove_if(std::begin(_bound_to_sources), std::end(_bound_to_sources),
+	std::lock_guard<std::mutex> lock(mutex_);
+	bound_to_sources_.erase(std::remove_if(std::begin(bound_to_sources_), std::end(bound_to_sources_),
 										   [source](const auto& item) { return item == source; }),
-							std::end(_bound_to_sources));
+							std::end(bound_to_sources_));
 }
 
 void sound_impl::unbind_from_all_sources()
 {
-	std::lock_guard<std::mutex> lock(_mutex);
-	for(auto& source : _bound_to_sources)
+    // We do this here to avoid recursive mutex lock.
+    mutex_.lock();
+    auto sources = std::move(bound_to_sources_);
+    bound_to_sources_.clear();
+    mutex_.unlock();
+    
+	for(auto& source : sources)
 	{
-		if(source)
+		if(source != nullptr)
 		{
 			source->unbind();
 		}
 	}
-	_bound_to_sources.clear();
 }
 
 void sound_impl::cleanup()
 {
-	_handle = 0;
+	handle_ = 0;
 	unbind_from_all_sources();
 }
 }

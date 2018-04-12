@@ -9,7 +9,7 @@ struct half
 {
 public:
 	half() = default;
-	half(float f)
+	explicit half(float f)
 	{
 		const std::uint32_t data = (std::uint32_t&)f;
 		const std::uint32_t signBit = (data >> 31);
@@ -17,10 +17,14 @@ public:
 		std::uint32_t mantissa = (data & 0x7FFFFF);
 
 		// Handle cases
-		if(exponent == 255) // NaN or inf
+		if(exponent == 255)
+		{ // NaN or inf
 			exponent = 31;
-		else if(exponent < 102) // (127-15)-10
+		}
+		else if(exponent < 102)
+		{ // (127-15)-10
 			exponent = mantissa = 0;
+		}
 		else if(exponent >= 143) // 127+(31-15)
 		{
 			exponent = 31;
@@ -33,7 +37,9 @@ public:
 			exponent = 0;
 		}
 		else
+		{
 			exponent -= 112;
+		}
 
 		// Store
 		_data = (std::uint16_t)((signBit << 15) | (exponent << 10) | (mantissa >> 13));
@@ -60,11 +66,17 @@ public:
 
 		// Handle cases
 		if(exponent == 31)
+		{
 			exponent = 255;
+		}
 		else if(exponent == 0)
+		{
 			exponent = 0;
+		}
 		else
+		{
 			exponent += 112;
+		}
 
 		// Convert
 		const std::uint32_t data = (signBit << 31) | (exponent << 23) | (mantissa << 13);
@@ -88,7 +100,7 @@ struct range
 	}
 
 	template <typename U, typename = typename std::enable_if<std::is_convertible<U, T>::value, void>::type>
-	range(const std::array<U, 2>& data)
+	explicit range(const std::array<U, 2>& data)
 		: min(data[0])
 		, max(data[1])
 	{
@@ -124,7 +136,7 @@ struct size
 	}
 
 	template <typename U, typename = typename std::enable_if<std::is_convertible<U, T>::value, void>::type>
-	size(const std::array<U, 2>& data)
+	explicit size(const std::array<U, 2>& data)
 		: width(data[0])
 		, height(data[1])
 	{
@@ -144,16 +156,21 @@ struct size
 	inline bool operator<(const size& b) const
 	{
 		if(width != b.width)
+		{
 			return (width < b.width);
-		else
-			return (height < b.height);
+		}
+		return (height < b.height);
 	}
 	inline bool operator>(const size& b) const
 	{
 		if(width < b.width)
+		{
 			return false;
+		}
 		if(width > b.width)
+		{
 			return true;
+		}
 		return (height > b.height);
 	}
 
@@ -176,7 +193,7 @@ struct point
 	{
 	}
 	template <typename U, typename = typename std::enable_if<std::is_convertible<U, T>::value, void>::type>
-	point(const std::array<U, 2>& data)
+	explicit point(const std::array<U, 2>& data)
 		: x(data[0])
 		, y(data[1])
 	{
@@ -229,7 +246,7 @@ struct rect
 	template <typename T1 = T>
 	inline size<T1> size() const
 	{
-		return size<T1>(right - left, bottom - top);
+		return size<T1>(right - left /*+ 1*/, bottom - top /*+ 1*/);
 	}
 
 	template <typename T1 = T>
@@ -238,28 +255,28 @@ struct rect
 		return {left + width() / 2, top + height() / 2};
 	}
 
-    template <typename T1 = T>
+	template <typename T1 = T>
 	inline point<T1> tl() const
 	{
 		return {left, top};
 	}
-    template <typename T1 = T>
+	template <typename T1 = T>
 	inline point<T1> tr() const
 	{
 		return {right, top};
 	}
-    
-    template <typename T1 = T>
+
+	template <typename T1 = T>
 	inline point<T1> bl() const
 	{
 		return {left, bottom};
 	}
-    template <typename T1 = T>
+	template <typename T1 = T>
 	inline point<T1> br() const
 	{
 		return {right, bottom};
 	}
-    
+
 	inline bool contains(const point<T>& p) const
 	{
 		return (p.x >= left && p.x <= right && p.y >= top && p.y <= bottom);
@@ -275,10 +292,8 @@ struct rect
 		{
 			return rect();
 		}
-		else
-		{
-			return c;
-		}
+
+		return c;
 	}
 
 	inline bool operator==(const rect& b) const
@@ -309,32 +324,48 @@ struct rect
 	{
 		T r = left - b.left;
 		if(r)
+		{
 			return (r < 0);
+		}
 		r = top - b.top;
 		if(r)
+		{
 			return (r < 0);
+		}
 		r = right - b.right;
 		if(r)
+		{
 			return (r < 0);
+		}
 		r = bottom - b.bottom;
 		if(r)
+		{
 			return (r < 0);
+		}
 		return false;
 	}
 	inline bool operator>(const rect& b) const
 	{
 		T r = left - b.left;
 		if(r)
+		{
 			return (r > 0);
+		}
 		r = top - b.top;
 		if(r)
+		{
 			return (r > 0);
+		}
 		r = right - b.right;
 		if(r)
+		{
 			return (r > 0);
+		}
 		r = bottom - b.bottom;
 		if(r)
+		{
 			return (r > 0);
+		}
 		return false;
 	}
 
@@ -344,20 +375,48 @@ struct rect
 	}
 };
 
-using irange = range<std::int32_t>;
-using urange = range<std::uint32_t>;
-using frange = range<float>;
+using irange8_t = range<std::int8_t>;
+using irange16_t = range<std::int16_t>;
+using irange32_t = range<std::int32_t>;
+using irange64_t = range<std::int64_t>;
+using urange8_t = range<std::uint8_t>;
+using urange16_t = range<std::uint16_t>;
+using urange32_t = range<std::uint32_t>;
+using urange64_t = range<std::uint64_t>;
+using frange_t = range<float>;
+using drange_t = range<double>;
 
-using ipoint = point<std::int32_t>;
-using upoint = point<std::uint32_t>;
-using fpoint = point<float>;
+using isize8_t = size<std::int8_t>;
+using isize16_t = size<std::int16_t>;
+using isize32_t = size<std::int32_t>;
+using isize64_t = size<std::int64_t>;
+using usize8_t = size<std::uint8_t>;
+using usize16_t = size<std::uint16_t>;
+using usize32_t = size<std::uint32_t>;
+using usize64_t = size<std::uint64_t>;
+using fsize_t = size<float>;
+using dsize_t = size<double>;
 
-using isize = size<std::int32_t>;
-using usize = size<std::uint32_t>;
-using fsize = size<float>;
+using ipoint8_t = point<std::int8_t>;
+using ipoint16_t = point<std::int16_t>;
+using ipoint32_t = point<std::int32_t>;
+using ipoint64_t = point<std::int64_t>;
+using upoint8_t = point<std::uint8_t>;
+using upoint16_t = point<std::uint16_t>;
+using upoint32_t = point<std::uint32_t>;
+using upoint64_t = point<std::uint64_t>;
+using fpoint_t = point<float>;
+using dpoint_t = point<double>;
 
-using irect = rect<std::int32_t>;
-using urect = rect<std::uint32_t>;
-using frect = rect<float>;
+using irect8_t = rect<std::int8_t>;
+using irect16_t = rect<std::int16_t>;
+using irect32_t = rect<std::int32_t>;
+using irect64_t = rect<std::int64_t>;
+using urect8_t = rect<std::uint8_t>;
+using urect16_t = rect<std::uint16_t>;
+using urect32_t = rect<std::uint32_t>;
+using urect64_t = rect<std::uint64_t>;
+using frect_t = rect<float>;
+using drect_t = rect<double>;
 
 using delta_t = std::chrono::duration<float>;

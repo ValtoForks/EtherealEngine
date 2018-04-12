@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../ecs.h"
+#include "core/common/basetypes.hpp"
 #include <vector>
 
 namespace runtime
@@ -18,7 +19,7 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	void frame_update(std::chrono::duration<float> dt);
+	void frame_update(delta_t dt);
 
 	//-----------------------------------------------------------------------------
 	//  Name : getRoots ()
@@ -30,11 +31,11 @@ public:
 	//-----------------------------------------------------------------------------
 	const std::vector<entity>& get_roots() const
 	{
-		return _roots;
+		return roots_;
 	}
 
 private:
 	/// scene roots
-	std::vector<entity> _roots;
+	std::vector<entity> roots_;
 };
 }

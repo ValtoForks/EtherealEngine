@@ -15,7 +15,7 @@
 #define CAT_IMPL_(a, b) a##b
 #define CAT_(a, b) CAT_IMPL_(a, b)
 #ifdef __COUNTER__
-#define ANONYMOUS_VARIABLE(str) CAT_(str, __COUNTER__)
+#define ANONYMOUS_VARIABLE(str) CAT_(str, CAT_(__COUNTER__, CAT_(__LINE__, __COUNTER__)))
 #else
 #define ANONYMOUS_VARIABLE(str) CAT_(str, __LINE__)
 #endif
@@ -49,7 +49,7 @@ inline int get_reg(void (*f)())
 	template <>                                                                                              \
 	void rttr_auto_register_reflection_function_t<cls>();                                                    \
 	static const int ANONYMOUS_VARIABLE(auto_register__) =                                                   \
-		refl_detail::get_reg<cls>(&rttr_auto_register_reflection_function_t<cls>);
+		refl_detail::get_reg<cls>(&rttr_auto_register_reflection_function_t<cls>)
 
 #define REFLECT(cls)                                                                                         \
 	template <>                                                                                              \

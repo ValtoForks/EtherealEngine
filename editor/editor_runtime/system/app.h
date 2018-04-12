@@ -23,8 +23,10 @@ public:
 
 	virtual void stop();
 
-	void draw_docks(std::chrono::duration<float>);
-
+private:
+	void create_docks();
+	void register_console_commands();
+	void draw_docks(delta_t dt);
 	void draw_header(render_window& window);
 	void draw_dockspace(bool is_main, render_window& window, imguidock::dockspace& dockspace);
 	void draw_footer(render_window& window, imguidock::dockspace& dockspace);
@@ -33,11 +35,10 @@ public:
 	void draw_toolbar();
 	void handle_drag_and_drop();
 
-private:
-	bool _show_start_page = true;
+	bool show_start_page_ = true;
 	///
-	std::shared_ptr<console_log> _console_log;
+	std::shared_ptr<console_log> console_log_;
 	///
-	std::string _console_dock_name;
+	std::string console_dock_name_;
 };
 }

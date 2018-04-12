@@ -1,6 +1,6 @@
 #pragma once
 
-#include <chrono>
+#include "core/common/basetypes.hpp"
 #include <memory>
 
 class gpu_program;
@@ -21,10 +21,10 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	void frame_render(std::chrono::duration<float> dt);
+	void frame_render(delta_t dt);
 
 private:
 	///
-	std::unique_ptr<gpu_program> _program;
+	std::unique_ptr<gpu_program> program_;
 };
 }

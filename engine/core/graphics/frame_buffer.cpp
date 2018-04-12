@@ -41,8 +41,8 @@ frame_buffer::frame_buffer(void* _nwh, uint16_t _width, uint16_t _height, textur
 {
 	handle = create_frame_buffer(_nwh, _width, _height, _depth_format);
 
-	_cached_size = {_width, _height};
-	_bbratio = backbuffer_ratio::Count;
+	cached_size_ = {_width, _height};
+	bbratio_ = backbuffer_ratio::Count;
 }
 
 void frame_buffer::populate(const std::vector<fbo_attachment>& textures)
@@ -50,7 +50,7 @@ void frame_buffer::populate(const std::vector<fbo_attachment>& textures)
 	std::vector<attachment> buffer;
 	buffer.reserve(textures.size());
 
-	usize size = {0, 0};
+	usize32_t size = {0, 0};
 	auto ratio = backbuffer_ratio::Count;
 	for(auto& tex : textures)
 	{
@@ -62,43 +62,41 @@ void frame_buffer::populate(const std::vector<fbo_attachment>& textures)
 		att.layer = tex.layer;
 		buffer.push_back(att);
 	}
-	_textures = textures;
+	textures_ = textures;
 
 	handle = create_frame_buffer(static_cast<std::uint8_t>(buffer.size()), &buffer[0], false);
 
 	if(ratio == backbuffer_ratio::Count)
 	{
-		_bbratio = ratio;
-		_cached_size = size;
+		bbratio_ = ratio;
+		cached_size_ = size;
 	}
 	else
 	{
-		_bbratio = ratio;
-		_cached_size = {0, 0};
+		bbratio_ = ratio;
+		cached_size_ = {0, 0};
 	}
 }
 
-usize frame_buffer::get_size() const
+usize32_t frame_buffer::get_size() const
 {
-	if(_bbratio == backbuffer_ratio::Count)
+	if(bbratio_ == backbuffer_ratio::Count)
 	{
-		return _cached_size;
+		return cached_size_;
 
 	} // End if Absolute
-	else
-	{
-		std::uint16_t width;
-		std::uint16_t height;
-		gfx::get_size_from_ratio(_bbratio, width, height);
-		usize size = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
-		return size;
 
-	} // End if Relative
+	std::uint16_t width;
+	std::uint16_t height;
+	gfx::get_size_from_ratio(bbratio_, width, height);
+	usize32_t size = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
+	return size;
+	// End if Relative
 }
 
 const fbo_attachment& frame_buffer::get_attachment(std::uint32_t index) const
 {
-	return _textures[index];
+	return textures_[index];
 }
 
 const std::shared_ptr<texture>& frame_buffer::get_texture(uint32_t index) const
@@ -108,6 +106,6 @@ const std::shared_ptr<texture>& frame_buffer::get_texture(uint32_t index) const
 
 std::size_t frame_buffer::get_attachment_count() const
 {
-	return _textures.size();
+	return textures_.size();
 }
 }

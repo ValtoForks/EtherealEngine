@@ -16,8 +16,8 @@ std::shared_ptr<texture> render_view::get_texture(const std::string& id, std::ui
 	key.ratio = backbuffer_ratio::Count;
 
 	std::shared_ptr<texture> tex;
-	auto it = _textures.find(key);
-	if(it != _textures.end())
+	auto it = textures_.find(key);
+	if(it != textures_.end())
 	{
 		tex = it->second.first;
 		it->second.second = true;
@@ -25,7 +25,7 @@ std::shared_ptr<texture> render_view::get_texture(const std::string& id, std::ui
 	else
 	{
 		tex = std::make_shared<texture>(_width, _height, _hasMips, _numLayers, _format, _flags, _mem);
-		_textures[key] = std::pair<std::shared_ptr<texture>, bool>(tex, true);
+		textures_[key] = std::pair<std::shared_ptr<texture>, bool>(tex, true);
 	}
 
 	return tex;
@@ -46,8 +46,8 @@ std::shared_ptr<texture> render_view::get_texture(const std::string& id, backbuf
 	key.ratio = _ratio;
 
 	std::shared_ptr<texture> tex;
-	auto it = _textures.find(key);
-	if(it != _textures.end())
+	auto it = textures_.find(key);
+	if(it != textures_.end())
 	{
 		tex = it->second.first;
 		it->second.second = true;
@@ -55,7 +55,7 @@ std::shared_ptr<texture> render_view::get_texture(const std::string& id, backbuf
 	else
 	{
 		tex = std::make_shared<texture>(_ratio, _hasMips, _numLayers, _format, _flags);
-		_textures[key] = std::pair<std::shared_ptr<texture>, bool>(tex, true);
+		textures_[key] = std::pair<std::shared_ptr<texture>, bool>(tex, true);
 	}
 
 	return tex;
@@ -74,8 +74,8 @@ std::shared_ptr<texture> render_view::get_texture(const std::string& id, std::ui
 	key.ratio = backbuffer_ratio::Count;
 
 	std::shared_ptr<texture> tex;
-	auto it = _textures.find(key);
-	if(it != _textures.end())
+	auto it = textures_.find(key);
+	if(it != textures_.end())
 	{
 		tex = it->second.first;
 		it->second.second = true;
@@ -83,7 +83,7 @@ std::shared_ptr<texture> render_view::get_texture(const std::string& id, std::ui
 	else
 	{
 		tex = std::make_shared<texture>(_width, _height, _depth, _hasMips, _format, _flags, _mem);
-		_textures[key] = std::pair<std::shared_ptr<texture>, bool>(tex, true);
+		textures_[key] = std::pair<std::shared_ptr<texture>, bool>(tex, true);
 	}
 
 	return tex;
@@ -101,8 +101,8 @@ std::shared_ptr<texture> render_view::get_texture(const std::string& id, std::ui
 	key.ratio = backbuffer_ratio::Count;
 
 	std::shared_ptr<texture> tex;
-	auto it = _textures.find(key);
-	if(it != _textures.end())
+	auto it = textures_.find(key);
+	if(it != textures_.end())
 	{
 		tex = it->second.first;
 		it->second.second = true;
@@ -110,7 +110,7 @@ std::shared_ptr<texture> render_view::get_texture(const std::string& id, std::ui
 	else
 	{
 		tex = std::make_shared<texture>(_size, _hasMips, _numLayers, _format, _flags, _mem);
-		_textures[key] = std::pair<std::shared_ptr<texture>, bool>(tex, true);
+		textures_[key] = std::pair<std::shared_ptr<texture>, bool>(tex, true);
 	}
 
 	return tex;
@@ -123,8 +123,8 @@ std::shared_ptr<frame_buffer> render_view::get_fbo(const std::string& id,
 	key.id = id;
 	key.textures = bind_textures;
 	std::shared_ptr<frame_buffer> tex;
-	auto it = _fbos.find(key);
-	if(it != _fbos.end())
+	auto it = fbos_.find(key);
+	if(it != fbos_.end())
 	{
 		tex = it->second.first;
 		it->second.second = true;
@@ -132,31 +132,38 @@ std::shared_ptr<frame_buffer> render_view::get_fbo(const std::string& id,
 	else
 	{
 		tex = std::make_shared<frame_buffer>(bind_textures);
-		_fbos[key] = std::pair<std::shared_ptr<frame_buffer>, bool>(tex, true);
+		fbos_[key] = std::pair<std::shared_ptr<frame_buffer>, bool>(tex, true);
 	}
 
 	return tex;
 }
 
-std::shared_ptr<texture> render_view::get_depth_stencil_buffer(const usize& viewport_size)
+std::shared_ptr<texture> render_view::get_depth_stencil_buffer(const usize32_t& viewport_size)
 {
 	static auto format =
 		get_best_format(BGFX_CAPS_FORMAT_TEXTURE_FRAMEBUFFER,
 						format_search_flags::requires_depth | format_search_flags::requires_stencil);
+	return get_texture("DEPTH_STENCIL", viewport_size.width, viewport_size.height, false, 1, format);
+}
+
+std::shared_ptr<texture> render_view::get_depth_buffer(const usize32_t& viewport_size)
+{
+	static auto format =
+		get_best_format(BGFX_CAPS_FORMAT_TEXTURE_FRAMEBUFFER, format_search_flags::requires_depth);
 	return get_texture("DEPTH", viewport_size.width, viewport_size.height, false, 1, format);
 }
-std::shared_ptr<texture> render_view::get_output_buffer(const usize& viewport_size)
+std::shared_ptr<texture> render_view::get_output_buffer(const usize32_t& viewport_size)
 {
 	static auto format =
 		get_best_format(BGFX_CAPS_FORMAT_TEXTURE_FRAMEBUFFER,
 						format_search_flags::four_channels | format_search_flags::requires_alpha);
 	return get_texture("OUTPUT", viewport_size.width, viewport_size.height, false, 1, format);
 }
-std::shared_ptr<frame_buffer> render_view::get_output_fbo(const usize& viewport_size)
+std::shared_ptr<frame_buffer> render_view::get_output_fbo(const usize32_t& viewport_size)
 {
-	return get_fbo("OUTPUT", {get_output_buffer(viewport_size), get_depth_stencil_buffer(viewport_size)});
+	return get_fbo("OUTPUT", {get_output_buffer(viewport_size), get_depth_buffer(viewport_size)});
 }
-std::shared_ptr<frame_buffer> render_view::get_g_buffer_fbo(const usize& viewport_size)
+std::shared_ptr<frame_buffer> render_view::get_g_buffer_fbo(const usize32_t& viewport_size)
 {
 	static auto format =
 		get_best_format(BGFX_CAPS_FORMAT_TEXTURE_FRAMEBUFFER,
@@ -165,7 +172,7 @@ std::shared_ptr<frame_buffer> render_view::get_g_buffer_fbo(const usize& viewpor
 		get_best_format(BGFX_CAPS_FORMAT_TEXTURE_FRAMEBUFFER, format_search_flags::four_channels |
 																  format_search_flags::requires_alpha |
 																  format_search_flags::half_precision_float);
-	auto depth_buffer = get_depth_stencil_buffer(viewport_size);
+	auto depth_buffer = get_depth_buffer(viewport_size);
 	auto buffer0 = get_texture("GBUFFER0", viewport_size.width, viewport_size.height, false, 1, format);
 	auto buffer1 =
 		get_texture("GBUFFER1", viewport_size.width, viewport_size.height, false, 1, normal_format);
@@ -197,7 +204,7 @@ void render_view::release_unused_resources()
 		} // End if destroy delay time has passed
 	};
 
-	check_resources(_fbos);
-	check_resources(_textures);
+	check_resources(fbos_);
+	check_resources(textures_);
 }
 }

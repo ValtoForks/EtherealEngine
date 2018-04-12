@@ -3,7 +3,7 @@
 #include <functional>
 #include <unordered_map>
 
-#include "core/common/nonstd/type_traits.hpp"
+#include "core/common/nonstd/type_index.hpp"
 #include "core/string_utils/string_utils.h"
 #include "core/tasks/task_system.h"
 
@@ -56,9 +56,6 @@ struct asset_storage : public basic_storage
 	using load_from_file_t = callable<bool(core::task_future<asset_handle<T>>&, const std::string&)>;
 	using load_from_instance_t =
 		callable<bool(core::task_future<asset_handle<T>>&, const std::string&, std::shared_ptr<T>)>;
-	using save_file_t = callable<void(const std::string&, const asset_handle<T>&)>;
-	using rename_file_t = callable<void(const std::string&, const std::string&)>;
-	using delete_file_t = callable<void(const std::string&)>;
 
 	using predicate_t = callable<bool(const typename request_container_t::value_type&)>;
 	//-----------------------------------------------------------------------------
@@ -98,7 +95,7 @@ struct asset_storage : public basic_storage
 	{
 		clear_with_condition([](const auto& it) {
 			const auto& task = it.second;
-			task.wait();
+			task.cancel();
 			return true;
 		});
 	}
@@ -119,7 +116,7 @@ struct asset_storage : public basic_storage
 
 			if(string_utils::begins_with(id, group, true))
 			{
-				task.wait();
+				task.cancel();
 				return true;
 			}
 			return false;
@@ -131,15 +128,6 @@ struct asset_storage : public basic_storage
 
 	/// key, mode
 	load_from_instance_t load_from_instance;
-
-	/// key, asset
-	save_file_t save_to_file;
-
-	/// key, new_key
-	rename_file_t rename_asset_file;
-
-	/// key
-	delete_file_t delete_asset_file;
 
 	/// Storage container
 	request_container_t container;

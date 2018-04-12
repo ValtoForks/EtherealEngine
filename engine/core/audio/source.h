@@ -124,7 +124,7 @@ public:
 	/// Sets the source buffer position, in seconds.
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	void set_playing_offset(sound_info::duration_t offset);
+	void set_playing_offset(sound_info::seconds_t offset);
 
 	//-----------------------------------------------------------------------------
 	//  Name : get_playing_offset ()
@@ -132,7 +132,7 @@ public:
 	/// Gets the source buffer position, in seconds.
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	sound_info::duration_t get_playing_offset() const;
+	sound_info::seconds_t get_playing_offset() const;
 
 	//-----------------------------------------------------------------------------
 	//  Name : get_playing_duration ()
@@ -140,7 +140,7 @@ public:
 	/// Gets the source buffer length, in seconds.
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	sound_info::duration_t get_playing_duration() const;
+	sound_info::seconds_t get_playing_duration() const;
 
 	//-----------------------------------------------------------------------------
 	//  Name : play ()
@@ -208,6 +208,6 @@ public:
 
 private:
 	/// pimpl idiom
-	std::unique_ptr<priv::source_impl> _impl;
+	std::unique_ptr<priv::source_impl> impl_;
 };
 }

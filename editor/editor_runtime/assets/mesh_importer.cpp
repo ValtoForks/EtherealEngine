@@ -8,7 +8,7 @@
 
 math::transform process_matrix(const aiMatrix4x4& assimp_matrix)
 {
-	math::transform matrix;
+	math::mat4 matrix;
 
 	matrix[0][0] = assimp_matrix.a1;
 	matrix[1][0] = assimp_matrix.a2;
@@ -52,52 +52,60 @@ void process_vertices(aiMesh* mesh, mesh::load_data& load_data)
 	for(size_t i = 0; i < mesh->mNumVertices; ++i, current_vertex_ptr += vertex_stride)
 	{
 		// position
-		if(mesh->mVertices && has_position)
+		if(mesh->mVertices != nullptr && has_position)
 		{
 			float position[4];
 			std::memcpy(position, &mesh->mVertices[i], sizeof(math::vec3));
 
 			if(has_position)
+			{
 				gfx::vertex_pack(position, false, gfx::attribute::Position, load_data.vertex_format,
 								 current_vertex_ptr);
+			}
 		}
 
 		// tex coords
-		if(mesh->mTextureCoords[0] && has_texcoord0)
+		if(mesh->mTextureCoords[0] != nullptr && has_texcoord0)
 		{
 			float textureCoords[4];
 			std::memcpy(textureCoords, &mesh->mTextureCoords[0][i], sizeof(math::vec2));
 
 			if(has_texcoord0)
+			{
 				gfx::vertex_pack(textureCoords, true, gfx::attribute::TexCoord0, load_data.vertex_format,
 								 current_vertex_ptr);
+			}
 		}
 
 		////normals
 		math::vec4 normal;
-		if(mesh->mNormals && has_normal)
+		if(mesh->mNormals != nullptr && has_normal)
 		{
 			std::memcpy(math::value_ptr(normal), &mesh->mNormals[i], sizeof(math::vec3));
 
 			if(has_normal)
+			{
 				gfx::vertex_pack(math::value_ptr(normal), true, gfx::attribute::Normal,
 								 load_data.vertex_format, current_vertex_ptr);
+			}
 		}
 
 		math::vec4 tangent;
 		// tangents
-		if(mesh->mTangents && has_tangent)
+		if(mesh->mTangents != nullptr && has_tangent)
 		{
 			std::memcpy(math::value_ptr(tangent), &mesh->mTangents[i], sizeof(math::vec3));
 			tangent.w = 1.0f;
 			if(has_tangent)
+			{
 				gfx::vertex_pack(math::value_ptr(tangent), true, gfx::attribute::Tangent,
 								 load_data.vertex_format, current_vertex_ptr);
+			}
 		}
 
 		// binormals
 		math::vec4 bitangent;
-		if(mesh->mBitangents && has_bitangent)
+		if(mesh->mBitangents != nullptr && has_bitangent)
 		{
 			std::memcpy(math::value_ptr(bitangent), &mesh->mBitangents[i], sizeof(math::vec3));
 			float handedness = math::dot(
@@ -105,8 +113,10 @@ void process_vertices(aiMesh* mesh, mesh::load_data& load_data)
 			tangent.w = handedness;
 
 			if(has_bitangent)
+			{
 				gfx::vertex_pack(math::value_ptr(bitangent), true, gfx::attribute::Bitangent,
 								 load_data.vertex_format, current_vertex_ptr);
+			}
 		}
 	}
 }
@@ -137,7 +147,7 @@ void process_faces(aiMesh* mesh, std::uint32_t subset_offset, mesh::load_data& l
 
 void process_bones(aiMesh* mesh, std::uint32_t subset_offset, mesh::load_data& load_data)
 {
-	if(mesh->mBones)
+	if(mesh->mBones != nullptr)
 	{
 		auto& bone_influences = load_data.skin_data.get_bones();
 
@@ -165,7 +175,9 @@ void process_bones(aiMesh* mesh, std::uint32_t subset_offset, mesh::load_data& l
 			}
 
 			if(bone_ptr == nullptr)
+			{
 				continue;
+			}
 
 			for(size_t j = 0; j < assimp_bone->mNumWeights; ++j)
 			{
@@ -212,7 +224,7 @@ void process_node(const aiNode* node, std::unique_ptr<mesh::armature_node>& arma
 
 void process_nodes(const aiScene* scene, mesh::load_data& load_data)
 {
-	if(scene->mRootNode)
+	if(scene->mRootNode != nullptr)
 	{
 		load_data.root_node = std::make_unique<mesh::armature_node>();
 		process_node(scene->mRootNode, load_data.root_node);
@@ -222,41 +234,52 @@ void process_nodes(const aiScene* scene, mesh::load_data& load_data)
 void process_animation(const aiAnimation* assimp_anim, runtime::animation& anim)
 {
 	anim.name = assimp_anim->mName.C_Str();
-	anim.duration = assimp_anim->mDuration;
-	anim.ticks_per_second = assimp_anim->mTicksPerSecond;
+	auto ticks_per_second = assimp_anim->mTicksPerSecond;
+	if(ticks_per_second < 0.001)
+	{
+		ticks_per_second = 25.0;
+	}
+
+	auto ticks = assimp_anim->mDuration;
+
+	anim.duration = decltype(anim.duration)(ticks * ticks_per_second);
 
 	if(assimp_anim->mNumChannels > 0)
+	{
 		anim.channels.resize(assimp_anim->mNumChannels);
+	}
 
 	for(size_t i = 0; i < assimp_anim->mNumChannels; ++i)
 	{
 		const aiNodeAnim* assimp_node_anim = assimp_anim->mChannels[i];
 		auto& node_anim = anim.channels[i];
 		node_anim.node_name = assimp_node_anim->mNodeName.C_Str();
-		node_anim.pre_state = static_cast<runtime::anim_behaviour>(assimp_node_anim->mPreState);
-		node_anim.post_state = static_cast<runtime::anim_behaviour>(assimp_node_anim->mPostState);
 
 		if(assimp_node_anim->mNumPositionKeys > 0)
+		{
 			node_anim.position_keys.resize(assimp_node_anim->mNumPositionKeys);
+		}
 
 		for(size_t idx = 0; idx < assimp_node_anim->mNumPositionKeys; ++idx)
 		{
 			const auto& anim_key = assimp_node_anim->mPositionKeys[idx];
 			auto& key = node_anim.position_keys[idx];
-			key.time = anim_key.mTime;
+			key.time = decltype(key.time)(anim_key.mTime);
 			key.value.x = anim_key.mValue.x;
 			key.value.y = anim_key.mValue.y;
 			key.value.z = anim_key.mValue.z;
 		}
 
 		if(assimp_node_anim->mNumRotationKeys > 0)
+		{
 			node_anim.rotation_keys.resize(assimp_node_anim->mNumRotationKeys);
+		}
 
 		for(size_t idx = 0; idx < assimp_node_anim->mNumRotationKeys; ++idx)
 		{
 			const auto& anim_key = assimp_node_anim->mRotationKeys[idx];
 			auto& key = node_anim.rotation_keys[idx];
-			key.time = anim_key.mTime;
+			key.time = decltype(key.time)(anim_key.mTime);
 			key.value.x = anim_key.mValue.x;
 			key.value.y = anim_key.mValue.y;
 			key.value.z = anim_key.mValue.z;
@@ -264,23 +287,27 @@ void process_animation(const aiAnimation* assimp_anim, runtime::animation& anim)
 		}
 
 		if(assimp_node_anim->mNumScalingKeys > 0)
+		{
 			node_anim.scaling_keys.resize(assimp_node_anim->mNumScalingKeys);
+		}
 
 		for(size_t idx = 0; idx < assimp_node_anim->mNumScalingKeys; ++idx)
 		{
 			const auto& anim_key = assimp_node_anim->mScalingKeys[idx];
-			auto& pos_key = node_anim.scaling_keys[idx];
-			pos_key.time = anim_key.mTime;
-			pos_key.value.x = anim_key.mValue.x;
-			pos_key.value.y = anim_key.mValue.y;
-			pos_key.value.z = anim_key.mValue.z;
+			auto& key = node_anim.scaling_keys[idx];
+			key.time = decltype(key.time)(anim_key.mTime);
+			key.value.x = anim_key.mValue.x;
+			key.value.y = anim_key.mValue.y;
+			key.value.z = anim_key.mValue.z;
 		}
 	}
 }
 void process_animations(const aiScene* scene, std::vector<runtime::animation>& animations)
 {
 	if(scene->mNumAnimations > 0)
+	{
 		animations.resize(scene->mNumAnimations);
+	}
 
 	for(size_t i = 0; i < scene->mNumAnimations; ++i)
 	{
@@ -313,12 +340,18 @@ bool importer::load_mesh_data_from_file(const std::string& path, mesh::load_data
 				  aiProcess_SortByPType | aiProcess_FindDegenerates | aiProcess_FindInvalidData |
 				  aiProcess_FindInstances | aiProcess_ValidateDataStructure | aiProcess_OptimizeMeshes);
 
-	if(!scene)
+	if(scene == nullptr)
 	{
 		APPLOG_ERROR(importer.GetErrorString());
 		return false;
 	}
 	process_imported_scene(scene, load_data, animations);
+
+	//	double factor = 1.0;
+	//	if(scene->mMetaData != nullptr)
+	//	{
+	//		scene->mMetaData->Get("UnitScaleFactor", factor);
+	//	}
 
 	return true;
 }

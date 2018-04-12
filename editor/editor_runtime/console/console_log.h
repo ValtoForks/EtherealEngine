@@ -1,17 +1,17 @@
 #pragma once
 
+#include "core/common/nonstd/ring_buffer.hpp"
+#include "core/console/console.h"
 #include "core/logging/logging.h"
 #include <array>
 #include <atomic>
-#include "core/console/console.h"
-#include "core/common/nonstd/ring_buffer.hpp"
 #include <string>
 
 class console_log : public logging::sinks::base_sink<std::mutex>, public console
 {
 public:
-    template<typename T>
-    using ring_buffer = nonstd::stack_ringbuffer<T, 150>;
+	template <typename T>
+	using ring_buffer = nonstd::stack_ringbuffer<T, 150>;
 	using entries_t = ring_buffer<std::pair<std::string, logging::level::level_enum>>;
 
 	//-----------------------------------------------------------------------------
@@ -64,7 +64,7 @@ public:
 	//-----------------------------------------------------------------------------
 	inline bool has_new_entries() const
 	{
-		return _has_new_entries;
+		return has_new_entries_;
 	}
 
 	const std::array<float, 4>& get_level_colorization(logging::level::level_enum level);
@@ -78,13 +78,13 @@ public:
 	//-----------------------------------------------------------------------------
 	inline void set_has_new_entries(bool val)
 	{
-		_has_new_entries = val;
+		has_new_entries_ = val;
 	}
 
 private:
-	std::recursive_mutex _entries_mutex;
+	std::recursive_mutex entries_mutex_;
 	///
-	entries_t _entries;
+	entries_t entries_;
 	///
-	std::atomic<bool> _has_new_entries = {false};
+	std::atomic<bool> has_new_entries_ = {false};
 };

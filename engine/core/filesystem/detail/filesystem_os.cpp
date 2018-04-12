@@ -1,5 +1,5 @@
 #include "filesystem_os.h"
-#include "../../common/platform_config.h"
+#include "../../common/platform/config.hpp"
 #include <array>
 #include <cstdlib>
 
@@ -7,7 +7,7 @@ namespace fs
 {
 static path executable_path_fallback(const char* argv0)
 {
-	if(0 == argv0 || 0 == argv0[0])
+	if(nullptr == argv0 || 0 == argv0[0])
 	{
 		return "";
 	}
@@ -16,15 +16,15 @@ static path executable_path_fallback(const char* argv0)
 	return full_path;
 }
 }
-#if $on($windows)
-#include <windows.h>
+#if ETH_ON(ETH_PLATFORM_WINDOWS)
+#include <Windows.h>
 namespace fs
 {
 path executable_path(const char* argv0)
 {
 	std::array<char, 1024> buf;
 	buf.fill(0);
-	DWORD ret = GetModuleFileNameA(NULL, buf.data(), DWORD(buf.size()));
+	DWORD ret = GetModuleFileNameA(nullptr, buf.data(), DWORD(buf.size()));
 	if(ret == 0 || std::size_t(ret) == buf.size())
 	{
 		return executable_path_fallback(argv0);
@@ -33,10 +33,10 @@ path executable_path(const char* argv0)
 }
 void show_in_graphical_env(const path& _path)
 {
-	ShellExecuteA(NULL, NULL, _path.string().c_str(), NULL, NULL, SW_SHOWNORMAL);
+	ShellExecuteA(nullptr, nullptr, _path.string().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 }
-#elif $on($apple)
+#elif ETH_ON(ETH_PLATFORM_APPLE)
 #include <mach-o/dyld.h>
 namespace fs
 {
@@ -58,7 +58,7 @@ void show_in_graphical_env(const path& _path)
 {
 }
 }
-#elif $on($linux)
+#elif ETH_ON(ETH_PLATFORM_LINUX)
 
 #include <unistd.h>
 namespace fs
@@ -84,7 +84,8 @@ void show_in_graphical_env(const path& _path)
 	static std::string space = " ";
 	const std::string cmd_args = "'" + _path.string() + "'";
 	const std::string whole_command = cmd + space + cmd_args;
-	std::system(whole_command.c_str());
+	auto result = std::system(whole_command.c_str());
+	(void)result;
 }
 }
 #else

@@ -37,15 +37,16 @@ public:
 	std::shared_ptr<frame_buffer> get_fbo(const std::string& id,
 										  const std::vector<std::shared_ptr<texture>>& bind_textures);
 
-	std::shared_ptr<texture> get_depth_stencil_buffer(const usize& viewport_size);
-	std::shared_ptr<texture> get_output_buffer(const usize& viewport_size);
-	std::shared_ptr<frame_buffer> get_output_fbo(const usize& viewport_size);
-	std::shared_ptr<frame_buffer> get_g_buffer_fbo(const usize& viewport_size);
+	std::shared_ptr<texture> get_depth_stencil_buffer(const usize32_t& viewport_size);
+	std::shared_ptr<texture> get_depth_buffer(const usize32_t& viewport_size);
+	std::shared_ptr<texture> get_output_buffer(const usize32_t& viewport_size);
+	std::shared_ptr<frame_buffer> get_output_fbo(const usize32_t& viewport_size);
+	std::shared_ptr<frame_buffer> get_g_buffer_fbo(const usize32_t& viewport_size);
 
 	void release_unused_resources();
 
 private:
-	std::unordered_map<texture_key, std::pair<std::shared_ptr<texture>, bool>> _textures;
-	std::unordered_map<fbo_key, std::pair<std::shared_ptr<frame_buffer>, bool>> _fbos;
+	std::unordered_map<texture_key, std::pair<std::shared_ptr<texture>, bool>> textures_;
+	std::unordered_map<fbo_key, std::pair<std::shared_ptr<frame_buffer>, bool>> fbos_;
 };
 }

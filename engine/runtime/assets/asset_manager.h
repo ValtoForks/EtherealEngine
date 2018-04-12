@@ -43,18 +43,17 @@ public:
 	template <typename S, typename... Args>
 	asset_storage<S>& add_storage(Args&&... args)
 	{
-		auto operation = _storages.emplace(rtti::type_id<asset_storage<S>>().hash_code(),
+		auto operation = storages_.emplace(rtti::type_id<asset_storage<S>>().hash_code(),
 										   std::make_unique<asset_storage<S>>(std::forward<Args>(args)...));
 
 		return static_cast<asset_storage<S>&>(*operation.first->second);
 	}
 
 	template <typename T>
-	core::task_future<asset_handle<T>> load(const std::string& key, load_mode mode = load_mode::sync,
-											load_flags flags = load_flags::standard)
+	core::task_future<asset_handle<T>> load(const std::string& key, load_flags flags = load_flags::standard)
 	{
 		auto& storage = get_storage<T>();
-		return load_asset_from_file_impl<T>(key, mode, flags, storage.container_mutex, storage.container,
+		return load_asset_from_file_impl<T>(key, flags, storage.container_mutex, storage.container,
 											storage.load_from_file);
 	}
 
@@ -69,10 +68,10 @@ public:
 	template <typename T>
 	core::task_future<asset_handle<T>>
 	create_asset_from_memory(const std::string& key, const std::uint8_t* data, const std::uint32_t& size,
-							 load_mode mode = load_mode::sync, load_flags flags = load_flags::standard)
+							 load_flags flags = load_flags::standard)
 	{
 		auto& storage = get_storage<T>();
-		return create_asset_from_memory_impl<T>(key, data, size, mode, flags, storage.container_mutex,
+		return create_asset_from_memory_impl<T>(key, data, size, flags, storage.container_mutex,
 												storage.container, storage.load_from_memory);
 	}
 
@@ -96,8 +95,6 @@ public:
 	void rename_asset(const std::string& key, const std::string& new_key)
 	{
 		auto& storage = get_storage<T>();
-		if(storage.rename_asset_file)
-			storage.rename_asset_file(key, new_key);
 
 		std::lock_guard<std::recursive_mutex> lock(storage.container_mutex);
 		auto it = storage.container.find(key);
@@ -129,39 +126,6 @@ public:
 			storage.container.erase(it);
 		}
 	}
-	//-----------------------------------------------------------------------------
-	//  Name : delete_asset ()
-	/// <summary>
-	///
-	///
-	///
-	/// </summary>
-	//-----------------------------------------------------------------------------
-	template <typename T>
-	void delete_asset(const std::string& key)
-	{
-		auto& storage = get_storage<T>();
-		if(storage.delete_asset_file)
-			storage.delete_asset_file(key);
-
-		clear_asset<T>(key);
-	}
-
-	//-----------------------------------------------------------------------------
-	//  Name : save ()
-	/// <summary>
-	///
-	///
-	///
-	/// </summary>
-	//-----------------------------------------------------------------------------
-	template <typename T>
-	void save(const asset_handle<T>& asset)
-	{
-		auto& storage = get_storage<T>();
-		if(storage.save_to_file)
-			storage.save_to_file(asset.id(), asset);
-	}
 
 private:
 	//-----------------------------------------------------------------------------
@@ -174,8 +138,7 @@ private:
 	//-----------------------------------------------------------------------------
 	template <typename T, typename F>
 	core::task_future<asset_handle<T>>
-	load_asset_from_file_impl(const std::string& key, load_mode mode, load_flags flags,
-							  std::recursive_mutex& container_mutex,
+	load_asset_from_file_impl(const std::string& key, load_flags flags, std::recursive_mutex& container_mutex,
 							  typename asset_storage<T>::request_container_t& container, F&& load_func)
 	{
 		std::unique_lock<std::recursive_mutex> lock(container_mutex);
@@ -186,28 +149,31 @@ private:
 			if(flags == load_flags::reload && future.is_ready())
 			{
 				if(load_func)
+				{
+					// calling the function on a locked mutex is ok
+					// since we dont expect this to actually
+					// do much except add tasks to the executor
 					load_func(future, key);
+				}
 			}
 			auto future_copy = future;
 
 			lock.unlock();
 
-			if(mode == load_mode::sync)
-			{
-				future_copy.wait();
-			}
-
 			return future_copy;
 		}
-		else
-		{
-			auto& future = container[key];
-			// Dispatch the loading
-			if(load_func)
-				load_func(future, key);
 
-			return future;
+		auto& future = container[key];
+		// Dispatch the loading
+		if(load_func)
+		{
+			// calling the function on a locked mutex is ok
+			// since we dont expect this to actually
+			// do much except add tasks to the executor
+			load_func(future, key);
 		}
+
+		return future;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -221,7 +187,7 @@ private:
 	template <typename T, typename F>
 	core::task_future<asset_handle<T>>&
 	create_asset_from_memory_impl(const std::string& key, const std::uint8_t* data, const std::uint32_t& size,
-								  load_mode mode, load_flags flags, std::recursive_mutex& container_mutex,
+								  load_flags /*flags*/, std::recursive_mutex& container_mutex,
 								  typename asset_storage<T>::request_container_t& container, F&& load_func)
 	{
 
@@ -233,15 +199,18 @@ private:
 			auto& future = it->second;
 			return future;
 		}
-		else
-		{
-			auto& future = container[key];
-			// Dispatch the loading
-			if(load_func)
-				load_func(future, key, data, size);
 
-			return future;
+		auto& future = container[key];
+		// Dispatch the loading
+		if(load_func)
+		{
+			// calling the function on a locked mutex is ok
+			// since we dont expect this to actually
+			// do much except add tasks to the executor
+			load_func(future, key, data, size);
 		}
+
+		return future;
 	}
 
 	template <typename T, typename F>
@@ -254,7 +223,13 @@ private:
 		auto& future = container[key];
 		// Dispatch the loading
 		if(load_func)
+		{
+			// loading on a locked mutex is ok
+			// since we dont expect this to actually
+			// do much except add tasks to the
+			// executor
 			load_func(future, key, entry);
+		}
 
 		return future;
 	}
@@ -270,10 +245,8 @@ private:
 		{
 			return it->second;
 		}
-		else
-		{
-			return {};
-		}
+
+		return {};
 	}
 
 	//-----------------------------------------------------------------------------
@@ -285,11 +258,11 @@ private:
 	template <typename S>
 	asset_storage<S>& get_storage()
 	{
-		auto it = _storages.find(rtti::type_id<asset_storage<S>>().hash_code());
-		assert(it != _storages.end());
+		auto it = storages_.find(rtti::type_id<asset_storage<S>>().hash_code());
+		assert(it != storages_.end());
 		return (static_cast<asset_storage<S>&>(*it->second.get()));
 	}
 	/// Different storages
-	std::unordered_map<std::size_t, std::unique_ptr<basic_storage>> _storages;
+	std::unordered_map<std::size_t, std::unique_ptr<basic_storage>> storages_;
 };
 }

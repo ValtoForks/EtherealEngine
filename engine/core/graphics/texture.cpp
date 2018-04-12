@@ -7,13 +7,17 @@ texture::texture(const memory_view* _mem, std::uint32_t _flags /*= BGFX_TEXTURE_
 				 std::uint8_t _skip /*= 0 */, texture_info* _info /*= nullptr*/)
 {
 	texture_info* pInfo = _info;
-	if(!pInfo)
+	if(pInfo == nullptr)
+	{
 		pInfo = &info;
+	}
 
 	handle = create_texture(_mem, _flags, _skip, pInfo);
 
-	if(pInfo)
+	if(pInfo != nullptr)
+	{
 		info = *pInfo;
+	}
 
 	flags = _flags;
 	ratio = backbuffer_ratio::Count;
@@ -68,23 +72,21 @@ texture::texture(backbuffer_ratio _ratio, bool _hasMips, std::uint16_t _numLayer
 	ratio = _ratio;
 }
 
-usize texture::get_size() const
+usize32_t texture::get_size() const
 {
 	if(ratio == backbuffer_ratio::Count)
 	{
-		usize size = {static_cast<std::uint32_t>(info.width), static_cast<std::uint32_t>(info.height)};
+		usize32_t size = {static_cast<std::uint32_t>(info.width), static_cast<std::uint32_t>(info.height)};
 		return size;
 
 	} // End if Absolute
-	else
-	{
-		std::uint16_t width;
-		std::uint16_t height;
-		get_size_from_ratio(ratio, width, height);
-		usize size = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
-		return size;
 
-	} // End if Relative
+	std::uint16_t width;
+	std::uint16_t height;
+	get_size_from_ratio(ratio, width, height);
+	usize32_t size = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
+	return size;
+	// End if Relative
 }
 
 bool texture::is_render_target() const

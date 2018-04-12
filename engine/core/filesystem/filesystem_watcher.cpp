@@ -3,7 +3,7 @@ namespace fs
 {
 using namespace std::literals;
 
-static void log_path(const fs::path&)
+static void log_path(const fs::path& /*unused*/)
 {
 }
 static std::pair<path, std::string> get_path_filter_pair(const fs::path& path)
@@ -11,7 +11,7 @@ static std::pair<path, std::string> get_path_filter_pair(const fs::path& path)
 	// extract wild card and parent path
 	std::string key = path.string();
 	fs::path p = path;
-	size_t wildCardPos = key.find("*");
+	size_t wildCardPos = key.find('*');
 	std::string filter;
 	if(wildCardPos != std::string::npos)
 	{
@@ -36,7 +36,7 @@ static std::pair<path, std::string> visit_wild_card_path(const fs::path& path, b
 	if(!path_filter.second.empty())
 	{
 		std::string full = (path_filter.first / path_filter.second).string();
-		size_t wildcard_pos = full.find("*");
+		size_t wildcard_pos = full.find('*');
 		std::string before = full.substr(0, wildcard_pos);
 		std::string after = full.substr(wildcard_pos + 1);
 		fs::directory_iterator end;
@@ -47,63 +47,62 @@ static std::pair<path, std::string> visit_wild_card_path(const fs::path& path, b
 		}
 		else if(fs::exists(path_filter.first, err))
 		{
-            const auto iterate = [&](auto& it)
-            {
-                for(const auto& entry : it)
-                {
-                    std::string current = entry.path().string();
-                    size_t before_pos = current.find(before);
-                    size_t after_pos = current.find(after);
-                    if((before_pos != std::string::npos || before.empty()) &&
-                       (after_pos != std::string::npos || after.empty()))
-                    {
-                        if(visitor(entry.path()))
-                        {
-                            break;
-                        }
-                    }
-                }
-            };
-		
-            if(recursive)
-            {
-                fs::recursive_directory_iterator it(path_filter.first, err);
-                iterate(it);
-            }
-            else
-            {
-                fs::directory_iterator it(path_filter.first, err);
-                iterate(it);
-            }
+			const auto iterate = [&](auto& it) {
+				for(const auto& entry : it)
+				{
+					std::string current = entry.path().string();
+					size_t before_pos = current.find(before);
+					size_t after_pos = current.find(after);
+					if((before_pos != std::string::npos || before.empty()) &&
+					   (after_pos != std::string::npos || after.empty()))
+					{
+						if(visitor(entry.path()))
+						{
+							break;
+						}
+					}
+				}
+			};
+
+			if(recursive)
+			{
+				fs::recursive_directory_iterator it(path_filter.first, err);
+				iterate(it);
+			}
+			else
+			{
+				fs::directory_iterator it(path_filter.first, err);
+				iterate(it);
+			}
 		}
 	}
 	return path_filter;
 }
 
-class filesystem_watcher::watcher_impl
+class filesystem_watcher::impl
 {
 public:
 	//-----------------------------------------------------------------------------
-	//  Name : watcher_impl ()
+	//  Name : impl ()
 	/// <summary>
 	///
 	///
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	watcher_impl(const fs::path& path, const std::string& filter, bool recursive, bool initial_list,
-				 clock_t::duration poll_interval, const notify_callback& list_callback)
-		: _filter(filter)
-		, _callback(list_callback)
-		, _poll_interval(poll_interval)
-		, _recursive(recursive)
+	impl(const fs::path& path, const std::string& filter, bool recursive, bool initial_list,
+		 clock_t::duration poll_interval, const notify_callback& list_callback)
+		: filter_(filter)
+		, callback_(list_callback)
+		, poll_interval_(poll_interval)
+		, recursive_(recursive)
 	{
-		_root = path;
+		root_ = path;
 		std::vector<filesystem_watcher::entry> entries;
 		std::vector<size_t> created;
 		std::vector<size_t> modified;
 		// make sure we store all initial write time
-		if(!_filter.empty())
+		if(!filter_.empty())
 		{
 			visit_wild_card_path(path / filter, recursive, false,
 								 [this, &entries, &created, &modified](const fs::path& p) {
@@ -113,16 +112,16 @@ public:
 		}
 		else
 		{
-			poll_entry(_root, entries, created, modified);
+			poll_entry(root_, entries, created, modified);
 		}
 
 		if(initial_list)
 		{
 			// this means that the first watch won't call the callback function
 			// so we have to manually call it here if we want that behavior
-			if(entries.size() > 0 && _callback)
+			if(!entries.empty() && callback_)
 			{
-				_callback(entries, true);
+				callback_(entries, true);
 			}
 		}
 	}
@@ -142,9 +141,9 @@ public:
 		std::vector<size_t> created;
 		std::vector<size_t> modified;
 		// otherwise we check the whole parent directory
-		if(!_filter.empty())
+		if(!filter_.empty())
 		{
-			visit_wild_card_path(_root / _filter, _recursive, false,
+			visit_wild_card_path(root_ / filter_, recursive_, false,
 								 [this, &entries, &created, &modified](const fs::path& p) {
 									 poll_entry(p, entries, created, modified);
 									 return false;
@@ -152,22 +151,24 @@ public:
 		}
 		else
 		{
-			poll_entry(_root, entries, created, modified);
+			poll_entry(root_, entries, created, modified);
 		}
 
 		process_modifications(entries, created, modified);
 
-		if(entries.size() > 0 && _callback)
+		if(!entries.empty() && callback_)
 		{
-			_callback(entries, false);
+			callback_(entries, false);
 		}
 	}
 
 	void process_modifications(std::vector<filesystem_watcher::entry>& entries,
-							   const std::vector<size_t>& created, const std::vector<size_t>&)
+							   const std::vector<size_t>& created, const std::vector<size_t>& /*unused*/)
 	{
-		auto it = std::begin(_entries);
-		while(it != std::end(_entries))
+		using namespace std::literals;
+
+		auto it = std::begin(entries_);
+		while(it != std::end(entries_))
 		{
 			auto& fi = it->second;
 			fs::error_code err;
@@ -177,12 +178,20 @@ public:
 				for(auto idx : created)
 				{
 					auto& e = entries[idx];
-					if(e.last_mod_time == fi.last_mod_time && e.size == fi.size)
+					if(e.size == fi.size)
 					{
-						e.status = filesystem_watcher::entry_status::renamed;
-						e.last_path = fi.path;
-						was_removed = false;
-						break;
+						using sys_clock = std::chrono::system_clock;
+						std::chrono::microseconds tolerance = 1000us;
+						auto diff = sys_clock::from_time_t(e.last_mod_time - fi.last_mod_time);
+						auto d = std::chrono::time_point_cast<std::chrono::microseconds>(diff);
+						if(e.last_mod_time == fi.last_mod_time)
+						{
+
+							e.status = filesystem_watcher::entry_status::renamed;
+							e.last_path = fi.path;
+							was_removed = false;
+							break;
+						}
 					}
 				}
 
@@ -192,7 +201,7 @@ public:
 					entries.push_back(fi);
 				}
 
-				it = _entries.erase(it);
+				it = entries_.erase(it);
 			}
 			else
 			{
@@ -219,8 +228,8 @@ public:
 		fs::file_status status = fs::status(path, err);
 		// add a new modification time to the map
 		std::string key = path.string();
-		auto it = _entries.find(key);
-		if(it != _entries.end())
+		auto it = entries_.find(key);
+		if(it != entries_.end())
 		{
 			auto& fi = it->second;
 
@@ -242,7 +251,7 @@ public:
 		else
 		{
 			// or compare with an older one
-			auto& fi = _entries[key];
+			auto& fi = entries_[key];
 			fi.path = path;
 			fi.last_path = path;
 			fi.last_mod_time = time;
@@ -258,19 +267,19 @@ public:
 protected:
 	friend class filesystem_watcher;
 	/// Path to watch
-	fs::path _root;
+	fs::path root_;
 	/// Filter applied
-	std::string _filter;
+	std::string filter_;
 	/// Callback for list of modifications
-	notify_callback _callback;
+	notify_callback callback_;
 	/// Cache watched files
-	std::map<std::string, filesystem_watcher::entry> _entries;
+	std::map<std::string, filesystem_watcher::entry> entries_;
 	///
-	clock_t::duration _poll_interval = 500ms;
+	clock_t::duration poll_interval_ = 500ms;
 
-	clock_t::time_point _last_poll = clock_t::now();
+	clock_t::time_point last_poll_ = clock_t::now();
 	///
-	bool _recursive = false;
+	bool recursive_ = false;
 };
 
 static filesystem_watcher& get_watcher()
@@ -306,7 +315,7 @@ void filesystem_watcher::touch(const fs::path& path, bool recursive, fs::file_ti
 		return;
 	}
 	// if not, visit each path if there's a wild card
-	if(path.string().find("*") != std::string::npos)
+	if(path.string().find('*') != std::string::npos)
 	{
 		visit_wild_card_path(path, recursive, true, [time](const fs::path& p) {
 			fs::error_code err;
@@ -329,29 +338,31 @@ filesystem_watcher::~filesystem_watcher()
 void filesystem_watcher::close()
 {
 	// stop the thread
-	_watching = false;
+	watching_ = false;
 	// remove all watchers
 	unwatch_all();
 
-	if(_thread.joinable())
-		_thread.join();
+	if(thread_.joinable())
+	{
+		thread_.join();
+	}
 }
 
 void filesystem_watcher::start()
 {
-	_watching = true;
-	_thread = std::thread([this]() {
+	watching_ = true;
+	thread_ = std::thread([this]() {
 		// keep watching for modifications every ms milliseconds
 		using namespace std::literals;
-		while(_watching)
+		while(watching_)
 		{
 			clock_t::duration sleep_time = 99999h;
 
 			// iterate through each watcher and check for modification
-			std::map<std::uint64_t, std::shared_ptr<watcher_impl>> watchers;
+			std::map<std::uint64_t, std::shared_ptr<impl>> watchers;
 			{
-				std::unique_lock<std::mutex> lock(_mutex);
-				watchers = _watchers;
+				std::unique_lock<std::mutex> lock(mutex_);
+				watchers = watchers_;
 			}
 
 			for(auto& pair : watchers)
@@ -360,13 +371,13 @@ void filesystem_watcher::start()
 
 				auto now = clock_t::now();
 
-				auto diff = (watcher->_last_poll + watcher->_poll_interval) - now;
+				auto diff = (watcher->last_poll_ + watcher->poll_interval_) - now;
 				if(diff <= clock_t::duration(0))
 				{
 					watcher->watch();
-					watcher->_last_poll = now;
+					watcher->last_poll_ = now;
 
-					sleep_time = std::min(sleep_time, watcher->_poll_interval);
+					sleep_time = std::min(sleep_time, watcher->poll_interval_);
 				}
 				else
 				{
@@ -374,8 +385,8 @@ void filesystem_watcher::start()
 				}
 			}
 
-			std::unique_lock<std::mutex> lock(_mutex);
-			_cv.wait_for(lock, sleep_time);
+			std::unique_lock<std::mutex> lock(mutex_);
+			cv_.wait_for(lock, sleep_time);
 		}
 	});
 }
@@ -386,8 +397,10 @@ std::uint64_t filesystem_watcher::watch_impl(const fs::path& path, bool recursiv
 {
 	auto& wd = get_watcher();
 	// and start its thread
-	if(!wd._watching)
+	if(!wd.watching_)
+	{
 		wd.start();
+	}
 
 	// add a new watcher
 	if(list_callback)
@@ -395,7 +408,7 @@ std::uint64_t filesystem_watcher::watch_impl(const fs::path& path, bool recursiv
 		std::string filter;
 		fs::path p = path;
 		// try to see if there's a match for the wild card
-		if(path.string().find("*") != std::string::npos)
+		if(path.string().find('*') != std::string::npos)
 		{
 			std::pair<fs::path, std::string> path_filter =
 				visit_wild_card_path(path, recursive, true, [](const fs::path&) { return true; });
@@ -419,12 +432,12 @@ std::uint64_t filesystem_watcher::watch_impl(const fs::path& path, bool recursiv
 		{
 			// we do it like this because if initial_list is true we don't want
 			// to call a user callback on a locked mutex
-			auto impl = std::make_shared<watcher_impl>(p, filter, recursive, initial_list, poll_interval,
-													   list_callback);
-			std::lock_guard<std::mutex> lock(wd._mutex);
-			wd._watchers.emplace(key, std::move(impl));
+			auto imp =
+				std::make_shared<impl>(p, filter, recursive, initial_list, poll_interval, list_callback);
+			std::lock_guard<std::mutex> lock(wd.mutex_);
+			wd.watchers_.emplace(key, std::move(imp));
 		}
-		wd._cv.notify_all();
+		wd.cv_.notify_all();
 		return key;
 	}
 
@@ -436,19 +449,19 @@ void filesystem_watcher::unwatch_impl(std::uint64_t key)
 	auto& wd = get_watcher();
 
 	{
-		std::lock_guard<std::mutex> lock(wd._mutex);
-		wd._watchers.erase(key);
+		std::lock_guard<std::mutex> lock(wd.mutex_);
+		wd.watchers_.erase(key);
 	}
-	wd._cv.notify_all();
+	wd.cv_.notify_all();
 }
 
 void filesystem_watcher::unwatch_all_impl()
 {
 	auto& wd = get_watcher();
 	{
-		std::lock_guard<std::mutex> lock(wd._mutex);
-		wd._watchers.clear();
+		std::lock_guard<std::mutex> lock(wd.mutex_);
+		wd.watchers_.clear();
 	}
-	wd._cv.notify_all();
+	wd.cv_.notify_all();
 }
 }

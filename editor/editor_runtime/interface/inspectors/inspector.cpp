@@ -1,15 +1,11 @@
 #include "inspector.h"
 
-REFLECT(inspector)
-{
-	rttr::registration::class_<inspector>("inspector");
-}
-
 void Tooltip(const rttr::property& prop)
 {
-	if(gui::IsItemHovered())
+	auto& g = *gui::GetCurrentContext();
+	if(!g.DragDropActive && gui::IsItemHovered())
 	{
-		// gui::SetMouseCursor(ImGuiMouseCursor_Help);
+		gui::SetMouseCursor(ImGuiMouseCursor_Help);
 		auto tooltip = prop.get_metadata("tooltip");
 		if(tooltip)
 		{
@@ -22,9 +18,10 @@ void Tooltip(const rttr::property& prop)
 
 void Tooltip(const std::string& tooltip)
 {
-	if(gui::IsItemHovered())
+	auto& g = *gui::GetCurrentContext();
+	if(!g.DragDropActive && gui::IsItemHovered())
 	{
-		// gui::SetMouseCursor(ImGuiMouseCursor_Help);
+		gui::SetMouseCursor(ImGuiMouseCursor_Help);
 		gui::BeginTooltip();
 		gui::TextUnformatted(tooltip.c_str());
 		gui::EndTooltip();
@@ -35,7 +32,9 @@ property_layout::property_layout(const rttr::property& prop, bool columns /*= tr
 	std::string pretty_name = prop.get_name().to_string();
 	auto meta_pretty_name = prop.get_metadata("pretty_name");
 	if(meta_pretty_name)
+	{
 		pretty_name = meta_pretty_name.get_value<std::string>();
+	}
 
 	if(columns)
 	{

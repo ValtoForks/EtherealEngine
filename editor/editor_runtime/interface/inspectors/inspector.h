@@ -26,22 +26,22 @@ struct property_layout
 	~property_layout();
 };
 
-REFLECT_EXTERN(inspector);
-
-#define INSPECTED_TYPE "inspected_type"
-
+REFLECT_INLINE(inspector)
+{
+	rttr::registration::class_<inspector>("inspector");
+}
 #define INSPECTOR_REFLECT(inspector_type, inspected_type)                                                    \
 	REFLECT_INLINE(inspector_type)                                                                           \
 	{                                                                                                        \
 		rttr::registration::class_<inspector_type>(#inspector_type)(                                         \
-			rttr::metadata(INSPECTED_TYPE, rttr::type::get<inspected_type>()))                               \
+			rttr::metadata("inspected_type", rttr::type::get<inspected_type>()))                             \
 			.constructor<>()(rttr::policy::ctor::as_std_shared_ptr);                                         \
 	}
 
 #define DECLARE_INSPECTOR(inspector_type, inspected_type)                                                    \
 	struct inspector_type : public inspector                                                                 \
 	{                                                                                                        \
-		REFLECTABLE(inspector_type, inspector)                                                               \
+		REFLECTABLEV(inspector_type, inspector)                                                              \
 		bool inspect(rttr::variant& var, bool read_only, const meta_getter& get_metadata);                   \
 	};                                                                                                       \
 	INSPECTOR_REFLECT(inspector_type, inspected_type)

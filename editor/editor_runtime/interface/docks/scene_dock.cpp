@@ -1,4 +1,5 @@
 #include "scene_dock.h"
+#include "../../assets/asset_extensions.h"
 #include "../../editing/editing_system.h"
 #include "../../system/project_manager.h"
 #include "core/graphics/render_pass.h"
@@ -6,6 +7,7 @@
 #include "core/string_utils/string_utils.h"
 #include "core/system/subsystem.h"
 #include "runtime/assets/asset_handle.h"
+#include "runtime/assets/asset_manager.h"
 #include "runtime/ecs/components/camera_component.h"
 #include "runtime/ecs/components/model_component.h"
 #include "runtime/ecs/components/transform_component.h"
@@ -16,8 +18,6 @@
 #include "runtime/rendering/mesh.h"
 #include "runtime/rendering/render_window.h"
 #include "runtime/rendering/renderer.h"
-
-static bool show_gbuffer = false;
 
 static bool bar(float _width, float _maxWidth, float _height, const ImVec4& _color)
 {
@@ -73,13 +73,13 @@ static void resource_bar(const char* _name, const char* _tooltip, uint32_t _num,
 	}
 }
 
-void show_statistics(const ImVec2& area, const unsigned int fps)
+void scene_dock::show_statistics(const ImVec2& area, unsigned int fps, bool& show_gbuffer)
 {
-	ImVec2 pos = gui::GetCursorScreenPos();
-	gui::SetNextWindowPos(pos);
+	auto stat_pos = gui::GetCurrentWindow()->Pos + gui::GetCursorPos();
+	gui::SetNextWindowPos(stat_pos);
 	gui::SetNextWindowCollapsed(true, ImGuiCond_FirstUseEver);
 	gui::SetNextWindowSizeConstraints(ImVec2(0, 0), area - gui::GetStyle().WindowPadding);
-	gui::Begin("STATISTICS", nullptr,
+	gui::Begin(("STATISTICS###" + title).c_str(), nullptr,
 			   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
 
 	auto stats = gfx::get_stats();
@@ -91,7 +91,7 @@ void show_statistics(const ImVec2& area, const unsigned int fps)
 
 	if(gui::CollapsingHeader(ICON_FA_INFO_CIRCLE " Render Info"))
 	{
-		gui::PushFont(gui::GetFont("default"));
+		gui::PushFont("default");
 
 		gui::Text("Submit CPU %0.3f, GPU %0.3f", double(stats->cpuTimeEnd - stats->cpuTimeBegin) * to_cpu_ms,
 				  double(stats->gpuTimeEnd - stats->gpuTimeBegin) * to_gpu_ms);
@@ -111,8 +111,7 @@ void show_statistics(const ImVec2& area, const unsigned int fps)
 		std::uint32_t ui_draw_calls = gui_sys.get_draw_calls();
 		gui::Text("Total Draw Calls: %u", stats->numDraw);
 		gui::Text("UI Draw Calls: %u", ui_draw_calls);
-		gui::Text("Scene Draw Calls: %u", stats->numDraw - ui_draw_calls);
-		gui::Text("Render Passes: %u", gfx::render_pass::get_pass());
+		gui::Text("Scene Draw Calls: %u", math::abs<std::uint32_t>(stats->numDraw - ui_draw_calls));
 
 		gui::PopFont();
 	}
@@ -123,7 +122,7 @@ void show_statistics(const ImVec2& area, const unsigned int fps)
 		const float itemHeight = gui::GetTextLineHeightWithSpacing();
 		const float maxWidth = 90.0f;
 
-		gui::PushFont(gui::GetFont("default"));
+		gui::PushFont("default");
 		gui::AlignTextToFramePadding();
 		gui::Text("Res: Num  / Max");
 		resource_bar("DIB", "Dynamic index buffers", stats->numDynamicIndexBuffers,
@@ -149,7 +148,7 @@ void show_statistics(const ImVec2& area, const unsigned int fps)
 
 	if(gui::CollapsingHeader(ICON_FA_CLOCK_O " Profiler"))
 	{
-		gui::PushFont(gui::GetFont("default"));
+		gui::PushFont("default");
 
 		if(0 == stats->numViews)
 		{
@@ -288,9 +287,7 @@ void draw_selected_camera(const ImVec2& size)
 							  ImGuiWindowFlags_AlwaysAutoResize))
 			{
 				auto tex = surface->get_attachment(0).texture;
-				bool is_rt = tex ? tex->is_render_target() : false;
-				bool is_orig_bl = gfx::is_origin_bottom_left();
-				gui::Image(surface->get_attachment(0).texture, is_rt, is_orig_bl, bounds);
+				gui::Image(gui::get_info(tex), bounds);
 			}
 			gui::End();
 
@@ -351,22 +348,28 @@ void manipulation_gizmos()
 			transform_comp->resolve(true);
 			auto transform = transform_comp->get_transform();
 			math::transform delta;
-			math::transform inputTransform = transform;
 			float* snap = nullptr;
 			if(input.is_key_down(mml::keyboard::LControl))
 			{
 				if(operation == imguizmo::operation::translate)
+				{
 					snap = &es.snap_data.translation_snap[0];
+				}
 				else if(operation == imguizmo::operation::rotate)
+				{
 					snap = &es.snap_data.rotation_degree_snap;
+				}
 				else if(operation == imguizmo::operation::scale)
+				{
 					snap = &es.snap_data.scale_snap;
+				}
 			}
 			const auto& camera = camera_comp->get_camera();
-			imguizmo::manipulate(camera.get_view(), camera.get_projection(), operation, mode, transform,
-								 nullptr, snap);
+			math::mat4 output = transform;
+			imguizmo::manipulate(camera.get_view(), camera.get_projection(), operation, mode,
+								 math::value_ptr(output), nullptr, snap);
 
-			transform_comp->set_transform(transform);
+			transform_comp->set_transform(output);
 
 			//			if(sel.has_component<model_component>())
 			//			{
@@ -394,8 +397,9 @@ void manipulation_gizmos()
 void handle_camera_movement()
 {
 	if(!gui::IsWindowFocused())
+	{
 		return;
-
+	}
 	auto& es = core::get_subsystem<editor::editing_system>();
 	auto& input = core::get_subsystem<runtime::input>();
 	auto& sim = core::get_subsystem<core::simulation>();
@@ -424,6 +428,8 @@ void handle_camera_movement()
 		{
 			transform->move_local({0.0f, delta_move.y * movement_speed * dt, 0.0f});
 		}
+
+		transform->resolve(true);
 	}
 
 	if(input.is_mouse_button_down(mml::mouse::right))
@@ -485,16 +491,129 @@ void handle_camera_movement()
 		float x = static_cast<float>(delta_move.x);
 		float y = static_cast<float>(delta_move.y);
 
-		// Make each pixel correspond to a quarter of a degree.
-		float dx = x * rotation_speed;
-		float dy = y * rotation_speed;
-
 		transform->resolve(true);
-		transform->rotate(0.0f, dx, 0.0f);
-		transform->rotate_local(dy, 0.0f, 0.0f);
+		// if(x != 0.0f|| y != 0.0f)
+		{
+			// Make each pixel correspond to a quarter of a degree.
+			float dx = x * rotation_speed;
+			float dy = y * rotation_speed;
+
+			transform->rotate(0.0f, dx, 0.0f);
+			transform->rotate_local(dy, 0.0f, 0.0f);
+		}
 
 		float delta_wheel = input.get_mouse_wheel_scroll_delta_move();
 		transform->move_local({0.0f, 0.0f, 14.0f * movement_speed * delta_wheel * dt});
+	}
+}
+
+static void process_drag_drop_target(std::shared_ptr<camera_component> camera_comp)
+{
+	auto& ecs = core::get_subsystem<runtime::entity_component_system>();
+	auto& am = core::get_subsystem<runtime::asset_manager>();
+	auto& es = core::get_subsystem<editor::editing_system>();
+
+	if(gui::BeginDragDropTarget())
+	{
+		if(gui::IsDragDropPayloadBeingAccepted())
+		{
+			gui::SetMouseCursor(ImGuiMouseCursor_Hand);
+		}
+		else
+		{
+			gui::SetMouseCursor(ImGuiMouseCursor_NotAllowed);
+		}
+
+		for(const auto& type : ex::get_suported_formats<prefab>())
+		{
+			auto payload = gui::AcceptDragDropPayload(type.c_str());
+			if(payload != nullptr)
+			{
+				std::string absolute_path(reinterpret_cast<const char*>(payload->Data),
+										  std::size_t(payload->DataSize));
+
+				std::string key = fs::convert_to_protocol(fs::path(absolute_path)).string();
+				using asset_t = prefab;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(key);
+				if(entry_future.is_ready())
+				{
+					entry = entry_future.get();
+				}
+				if(entry)
+				{
+					auto object = entry->instantiate();
+					auto trans_comp = object.get_component<transform_component>().lock();
+					if(trans_comp)
+					{
+						math::vec3 projected_pos;
+						auto cursor_pos = gui::GetMousePos();
+						if(camera_comp->get_camera().viewport_to_world(
+							   math::vec2{cursor_pos.x, cursor_pos.y},
+							   math::plane::from_point_normal(math::vec3{0.0f, 0.0f, 0.0f},
+															  math::vec3{0.0f, 1.0f, 0.0f}),
+							   projected_pos, false))
+						{
+
+							trans_comp->set_position(projected_pos);
+						}
+					}
+					es.select(object);
+				}
+			}
+		}
+		for(const auto& type : ex::get_suported_formats<mesh>())
+		{
+			auto payload = gui::AcceptDragDropPayload(type.c_str());
+			if(payload != nullptr)
+			{
+				std::string absolute_path(reinterpret_cast<const char*>(payload->Data),
+										  std::size_t(payload->DataSize));
+
+				std::string key = fs::convert_to_protocol(fs::path(absolute_path)).string();
+				using asset_t = mesh;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(key);
+				if(entry_future.is_ready())
+				{
+					entry = entry_future.get();
+				}
+				if(entry)
+				{
+					model mdl;
+					mdl.set_lod(entry, 0);
+
+					auto object = ecs.create();
+					// Add component and configure it.
+					auto trans_comp = object.assign<transform_component>().lock();
+					if(trans_comp)
+					{
+						math::vec3 projected_pos;
+						auto cursor_pos = gui::GetMousePos();
+						if(camera_comp->get_camera().viewport_to_world(
+							   math::vec2{cursor_pos.x, cursor_pos.y},
+							   math::plane::from_point_normal(math::vec3{0.0f, 0.0f, 0.0f},
+															  math::vec3{0.0f, 1.0f, 0.0f}),
+							   projected_pos, false))
+						{
+
+							trans_comp->set_position(projected_pos);
+						}
+					}
+					// Add component and configure it.
+					auto model_comp = object.assign<model_component>().lock();
+					model_comp->set_casts_shadow(true);
+					model_comp->set_casts_reflection(false);
+					model_comp->set_model(mdl);
+
+					es.select(object);
+				}
+			}
+		}
+
+		gui::EndDragDropTarget();
 	}
 }
 
@@ -502,21 +621,22 @@ void scene_dock::render(const ImVec2& area)
 {
 	auto& es = core::get_subsystem<editor::editing_system>();
 	auto& renderer = core::get_subsystem<runtime::renderer>();
-	auto& ecs = core::get_subsystem<runtime::entity_component_system>();
 	auto& input = core::get_subsystem<runtime::input>();
 	auto& sim = core::get_subsystem<core::simulation>();
 
 	auto window = renderer.get_focused_window();
 	auto& editor_camera = es.camera;
 	auto& selected = es.selection_data.object;
-	auto& dragged = es.drag_data.object;
 
 	bool has_edit_camera = editor_camera && editor_camera.has_component<camera_component>() &&
 						   editor_camera.has_component<transform_component>();
-	show_statistics(area, sim.get_fps());
+
+	show_statistics(area, sim.get_fps(), show_gbuffer);
 
 	if(!has_edit_camera)
+	{
 		return;
+	}
 
 	auto size = gui::GetContentRegionAvail();
 	auto pos = gui::GetCursorScreenPos();
@@ -535,15 +655,15 @@ void scene_dock::render(const ImVec2& area)
 		const auto& viewport_size = camera.get_viewport_size();
 		const auto surface = render_view.get_output_fbo(viewport_size);
 		auto tex = surface->get_attachment(0).texture;
-		bool is_rt = tex ? tex->is_render_target() : false;
-		bool is_orig_bl = gfx::is_origin_bottom_left();
-		gui::Image(tex, is_rt, is_orig_bl, size);
+		gui::Image(gui::get_info(tex), size);
 
 		if(gui::IsItemClicked(1) || gui::IsItemClicked(2))
 		{
 			gui::SetWindowFocus();
-			if(window)
+			if(window != nullptr)
+			{
 				window->set_mouse_cursor_visible(false);
+			}
 		}
 
 		manipulation_gizmos();
@@ -589,8 +709,10 @@ void scene_dock::render(const ImVec2& area)
 
 		if(gui::IsMouseReleased(1) || gui::IsMouseReleased(2))
 		{
-			if(window)
+			if(window != nullptr)
+			{
 				window->set_mouse_cursor_visible(true);
+			}
 		}
 
 		if(show_gbuffer)
@@ -599,87 +721,21 @@ void scene_dock::render(const ImVec2& area)
 			for(std::uint32_t i = 0; i < g_buffer_fbo->get_attachment_count(); ++i)
 			{
 				const auto tex = g_buffer_fbo->get_attachment(i).texture;
-				bool is_rt = tex ? tex->is_render_target() : false;
-				bool is_orig_bl = gfx::is_origin_bottom_left();
-				gui::Image(tex, is_rt, is_orig_bl, size);
+				gui::Image(gui::get_info(tex), size);
 
 				if(gui::IsItemClicked(1) || gui::IsItemClicked(2))
 				{
 					gui::SetWindowFocus();
-					if(window)
-						window->set_mouse_cursor_visible(false);
-				}
-			}
-		}
-	}
-
-	if(gui::IsWindowHovered())
-	{
-		if(dragged)
-		{
-			math::vec3 projected_pos;
-
-			if(gui::IsMouseReleased(gui::drag_button))
-			{
-				auto cursor_pos = gui::GetMousePos();
-				camera_comp->get_camera().viewport_to_world(
-					math::vec2{cursor_pos.x, cursor_pos.y},
-					math::plane::from_point_normal(math::vec3{0.0f, 0.0f, 0.0f},
-												   math::vec3{0.0f, 1.0f, 0.0f}),
-					projected_pos, false);
-			}
-
-			if(dragged.is_type<runtime::entity>())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					auto dragged_entity = dragged.get_value<runtime::entity>();
-					if(dragged_entity)
+					if(window != nullptr)
 					{
-						dragged_entity.get_component<transform_component>().lock()->set_parent({});
+						window->set_mouse_cursor_visible(false);
 					}
-
-					es.drop();
-				}
-			}
-			if(dragged.is_type<asset_handle<prefab>>())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					auto pfab = dragged.get_value<asset_handle<prefab>>();
-					auto object = pfab->instantiate();
-					object.get_component<transform_component>().lock()->set_position(projected_pos);
-					es.drop();
-					es.select(object);
-				}
-			}
-			if(dragged.is_type<asset_handle<mesh>>())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					auto hmesh = dragged.get_value<asset_handle<mesh>>();
-					model mdl;
-					mdl.set_lod(hmesh, 0);
-
-					auto object = ecs.create();
-					// Add component and configure it.
-					object.assign<transform_component>().lock()->set_position(projected_pos);
-					// Add component and configure it.
-					object.assign<model_component>()
-						.lock()
-						->set_casts_shadow(true)
-						.set_casts_reflection(false)
-						.set_model(mdl);
-
-					es.drop();
-					es.select(object);
 				}
 			}
 		}
 	}
+
+	process_drag_drop_target(camera_comp);
 }
 
 scene_dock::scene_dock(const std::string& dtitle, bool close_button, const ImVec2& min_size)

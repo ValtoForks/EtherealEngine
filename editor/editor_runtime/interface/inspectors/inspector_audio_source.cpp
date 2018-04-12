@@ -9,7 +9,7 @@ bool inspector_audio_source_component::inspect(rttr::variant& var, bool read_onl
 
 	if(data)
 	{
-		gui::PushFont(gui::GetFont("icons"));
+		gui::PushFont("icons");
 		if(gui::Button(ICON_FA_PLAY))
 		{
 			data->play();
@@ -40,7 +40,7 @@ bool inspector_audio_source_component::inspect(rttr::variant& var, bool read_onl
 			{
 				if(gui::SliderFloat("##playing_offset", &cur, 0.0f, total_time))
 				{
-					data->set_playing_offset(audio::sound_info::duration_t(cur));
+					data->set_playing_offset(audio::sound_info::seconds_t(cur));
 				}
 			}
 		}

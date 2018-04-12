@@ -9,7 +9,7 @@ struct inspector_registry
 		auto inspector_types = rttr::type::get<inspector>().get_derived_classes();
 		for(auto& inspector_type : inspector_types)
 		{
-			auto inspected_type_var = inspector_type.get_metadata(INSPECTED_TYPE);
+			auto inspected_type_var = inspector_type.get_metadata("inspected_type");
 			if(inspected_type_var)
 			{
 				auto inspected_type = inspected_type_var.get_value<rttr::type>();
@@ -122,12 +122,21 @@ bool inspect_array(rttr::variant& var, bool read_only, const inspector::meta_get
 	if(view.is_dynamic())
 	{
 		property_layout layout("Size");
-		if(gui::InputInt("", &int_size))
+
+		if(!read_only)
 		{
-			if(int_size < 0)
-				int_size = 0;
-			size = static_cast<std::size_t>(int_size);
-			changed |= view.set_size(size);
+			if(gui::InputInt("", &int_size))
+			{
+				if(int_size < 0)
+					int_size = 0;
+				size = static_cast<std::size_t>(int_size);
+				changed |= view.set_size(size);
+			}
+		}
+		else
+		{
+			gui::AlignTextToFramePadding();
+			gui::TextUnformatted(std::to_string(int_size).c_str());
 		}
 	}
 

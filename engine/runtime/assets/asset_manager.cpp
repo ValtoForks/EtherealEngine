@@ -8,12 +8,11 @@ asset_manager::asset_manager()
 
 asset_manager::~asset_manager()
 {
-	clear();
 }
 
 void asset_manager::clear()
 {
-	for(auto& pair : _storages)
+	for(auto& pair : storages_)
 	{
 		auto& storage = pair.second;
 		storage->clear();
@@ -22,7 +21,7 @@ void asset_manager::clear()
 
 void asset_manager::clear(const std::string& group)
 {
-	for(auto& pair : _storages)
+	for(auto& pair : storages_)
 	{
 		auto& storage = pair.second;
 		storage->clear(group);

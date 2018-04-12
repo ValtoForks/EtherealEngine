@@ -76,7 +76,7 @@ struct dock
 	bool draging = false;
 
 	ImVec2 last_size;
-	ImVec2 min_size;
+	ImVec2 min_size = {100.0f, 100.0f};
 
 	std::string title;
 	std::function<void(const ImVec2&)> draw_function;
@@ -116,8 +116,8 @@ protected:
 		eNull
 	};
 
-	dock* _current_dock_to = nullptr;
-	dock_action _current_dock_action = eNull;
+	dock* current_dock_to_ = nullptr;
+	dock_action current_dock_action_ = eNull;
 
 public:
 	std::uint32_t owner_id = INVALID_WINDOW;

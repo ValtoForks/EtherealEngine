@@ -27,7 +27,9 @@ public:
 	T get_value(const std::string& section, const std::string& name, const T& defaultValue)
 	{
 		if(!has_value(section, name))
+		{
 			return defaultValue;
+		}
 
 		const auto& value = get(section, name);
 
@@ -51,8 +53,8 @@ public:
 	void load(const std::string& file);
 
 private:
-	typedef std::map<std::string, std::string> Section;
-	std::map<std::string, Section> values;
+	typedef std::map<std::string, std::string> section_type;
+	std::map<std::string, section_type> values_;
 };
 }
 

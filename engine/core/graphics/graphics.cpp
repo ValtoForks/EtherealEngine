@@ -3,88 +3,88 @@
 #include <map>
 namespace gfx
 {
-static std::map<std::string, std::function<void(const std::string& log_msg)>> s_loggers;
+static std::map<std::string, std::function<void(const std::string&)>> s_loggers;
 static bool s_initted = false;
 
-void set_info_logger(std::function<void(const std::string& log_msg)> logger)
+void set_info_logger(const std::function<void(const std::string&)>& logger)
 {
 	s_loggers["info"] = logger;
 }
-static std::function<void(const std::string& log_msg)> warning_logger;
-void set_warning_logger(std::function<void(const std::string& log_msg)> logger)
+static std::function<void(const std::string&)> warning_logger;
+void set_warning_logger(const std::function<void(const std::string&)>& logger)
 {
 	s_loggers["warning"] = logger;
 }
-static std::function<void(const std::string& log_msg)> error_logger;
-void set_error_logger(std::function<void(const std::string& log_msg)> logger)
+static std::function<void(const std::string&)> error_logger;
+void set_error_logger(const std::function<void(const std::string&)>& logger)
 {
 	s_loggers["error"] = logger;
 }
 void log(const std::string& category, const std::string& log_msg)
 {
 	if(s_loggers[category])
+	{
 		s_loggers[category](log_msg);
+	}
 }
 
 struct gfx_callback : public bgfx::CallbackI
 {
-	virtual ~gfx_callback()
+	~gfx_callback() final = default;
+
+	void traceVargs(const char* /*_filePath*/, std::uint16_t /*_line*/, const char* /*_format*/,
+					va_list /*_argList*/) final
 	{
 	}
 
-	virtual void traceVargs(const char* /*_filePath*/, std::uint16_t /*_line*/, const char* /*_format*/,
-							va_list /*_argList*/) final
+	void profilerBegin(const char* /*_name*/, std::uint32_t /*_abgr*/, const char* /*_filePath*/,
+					   std::uint16_t /*_line*/) final
 	{
 	}
 
-	virtual void profilerBegin(const char* /*_name*/, std::uint32_t /*_abgr*/, const char* /*_filePath*/,
-							   std::uint16_t /*_line*/) final
+	void profilerBeginLiteral(const char* /*_name*/, std::uint32_t /*_abgr*/, const char* /*_filePath*/,
+							  std::uint16_t /*_line*/) final
 	{
 	}
 
-	virtual void profilerBeginLiteral(const char* /*_name*/, std::uint32_t /*_abgr*/,
-									  const char* /*_filePath*/, std::uint16_t /*_line*/) final
+	void profilerEnd() final
 	{
 	}
-
-	virtual void profilerEnd() final
-	{
-	}
-	virtual void fatal(bgfx::Fatal::Enum /*_code*/, const char* _str) final
+	void fatal(bgfx::Fatal::Enum /*_code*/, const char* _str) final
 	{
 		log("error", _str);
 	}
 
-	virtual std::uint32_t cacheReadSize(std::uint64_t /*_id*/) final
+	std::uint32_t cacheReadSize(std::uint64_t /*_id*/) final
 	{
 		return 0;
 	}
 
-	virtual bool cacheRead(std::uint64_t /*_id*/, void* /*_data*/, std::uint32_t /*_size*/) final
+	bool cacheRead(std::uint64_t /*_id*/, void* /*_data*/, std::uint32_t /*_size*/) final
 	{
 		return false;
 	}
 
-	virtual void cacheWrite(std::uint64_t /*_id*/, const void* /*_data*/, std::uint32_t /*_size*/) final
+	void cacheWrite(std::uint64_t /*_id*/, const void* /*_data*/, std::uint32_t /*_size*/) final
 	{
 	}
 
-	virtual void screenShot(const char* /*_filePath*/, std::uint32_t /*_width*/, std::uint32_t /*_height*/,
-							std::uint32_t /*_pitch*/, const void* /*_data*/, std::uint32_t /*_size*/,
-							bool /*_yflip*/) final
+	void screenShot(const char* /*_filePath*/, std::uint32_t /*_width*/, std::uint32_t /*_height*/,
+					std::uint32_t /*_pitch*/, const void* /*_data*/, std::uint32_t /*_size*/,
+					bool /*_yflip*/) final
 	{
 	}
 
-	virtual void captureBegin(std::uint32_t /*_width*/, std::uint32_t /*_height*/, std::uint32_t /*_pitch*/,
-							  texture_format /*_format*/, bool /*_yflip*/) final
+	void captureBegin(std::uint32_t /*_width*/, std::uint32_t /*_height*/, std::uint32_t /*_pitch*/,
+					  texture_format /*_format*/, bool /*_yflip*/) final
 	{
 	}
 
-	virtual void captureEnd() final
+	void captureEnd() final
 	{
 	}
 
-	virtual void captureFrame(const void* /*_data*/, std::uint32_t /*_size*/) final
+	void captureFrame(const void* /*_data*/, std::uint32_t /*_size*/) final
 	{
 	}
 };
@@ -97,7 +97,9 @@ void set_platform_data(const platform_data& _data)
 void shutdown()
 {
 	if(s_initted)
+	{
 		bgfx::shutdown();
+	}
 }
 
 bool init(renderer_type _type, std::uint16_t _vendorId, std::uint16_t _deviceId)
@@ -109,13 +111,13 @@ bool init(renderer_type _type, std::uint16_t _vendorId, std::uint16_t _deviceId)
 	return s_initted;
 }
 
-void vertex_pack(const float _input[], bool _inputNormalized, attribute _attr, const vertex_layout& _decl,
+void vertex_pack(const float _input[4], bool _inputNormalized, attribute _attr, const vertex_layout& _decl,
 				 void* _data, uint32_t _index)
 {
 	bgfx::vertexPack(_input, _inputNormalized, _attr, _decl, _data, _index);
 }
 
-void vertex_unpack(float _output[], attribute _attr, const vertex_layout& _decl, const void* _data,
+void vertex_unpack(float _output[4], attribute _attr, const vertex_layout& _decl, const void* _data,
 				   uint32_t _index)
 {
 	bgfx::vertexUnpack(_output, _attr, _decl, _data, _index);
@@ -697,9 +699,9 @@ void set_vertex_buffer(uint8_t _stream, const transient_vertex_buffer* _tvb, uin
 	bgfx::setVertexBuffer(_stream, _tvb, _startVertex, _numVertices);
 }
 
-void set_instance_data_buffer(const instance_data_buffer* _idb, uint32_t _num)
+void set_instance_data_buffer(const instance_data_buffer* _idb, uint32_t _start, uint32_t _num)
 {
-	bgfx::setInstanceDataBuffer(_idb, _num);
+	bgfx::setInstanceDataBuffer(_idb, _start, _num);
 }
 
 void set_instance_data_buffer(vertex_buffer_handle _handle, uint32_t _startVertex, uint32_t _num)
@@ -1006,5 +1008,12 @@ float get_half_texel()
 	const renderer_type renderer = bgfx::getRendererType();
 	float half_texel = renderer_type::Direct3D9 == renderer ? 0.5f : 0.0f;
 	return half_texel;
+}
+
+bool is_supported(uint64_t flag)
+{
+	const auto caps = gfx::get_caps();
+	bool supported = 0 != (caps->supported & flag);
+	return supported;
 }
 }

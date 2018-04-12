@@ -10,12 +10,6 @@
 #include <memory>
 #include <vector>
 
-namespace gfx
-{
-struct vertex_buffer;
-struct index_buffer;
-}
-
 class camera;
 namespace triangle_flags
 {
@@ -198,7 +192,7 @@ private:
 	// Private Variables
 	//-------------------------------------------------------------------------
 	/// List of bones that influence the skin mesh vertices.
-	bone_influence_array_t _bones;
+	bone_influence_array_t bones_;
 
 }; // End Class skin_bind_data
 
@@ -350,21 +344,21 @@ protected:
 	//-------------------------------------------------------------------------
 	/// Sorted list of bones in this palette. References the elements in the
 	/// standard list.
-	bone_index_map_t _bones_lut;
+	bone_index_map_t bones_lut_;
 	/// Main palette of indices that reference the bones outlined in the main skin
 	/// binding data.
-	std::vector<std::uint32_t> _bones;
+	std::vector<std::uint32_t> bones_;
 	/// List of faces assigned to this palette.
-	std::vector<std::uint32_t> _faces;
+	std::vector<std::uint32_t> faces_;
 	/// The data group identifier used to separate the mesh data into subsets
 	/// relevant to this bone palette.
-	std::uint32_t _data_group_id;
+	std::uint32_t data_group_id_;
 	/// The maximum size of this palette.
-	std::uint32_t _maximum_size;
+	std::uint32_t maximum_size_;
 	/// The maximum vertex blend index for this palette (i.e. if every vertex was
 	/// only influenced by one bone,
 	/// this variable would contain a value of 0).
-	std::int32_t _maximum_blend_index;
+	std::int32_t maximum_blend_index_;
 
 }; // End Class bone_palette
 
@@ -544,10 +538,9 @@ public:
 	/// Create cube geometry.
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	bool create_cube(const gfx::vertex_layout& format, float width, float height, float depth,
-					 std::uint32_t width_segments, std::uint32_t height_segments,
-					 std::uint32_t depth_segments, bool inverted, mesh_create_origin origin,
-					 bool hardware_copy = true);
+	bool create_plane(const gfx::vertex_layout& format, float width, float height,
+					  std::uint32_t width_segments, std::uint32_t height_segments, mesh_create_origin origin,
+					  bool hardware_copy = true);
 
 	//-----------------------------------------------------------------------------
 	//  Name : create_cube ()
@@ -557,8 +550,7 @@ public:
 	//-----------------------------------------------------------------------------
 	bool create_cube(const gfx::vertex_layout& format, float width, float height, float depth,
 					 std::uint32_t width_segments, std::uint32_t height_segments,
-					 std::uint32_t depth_segments, float tex_u_scale, float tex_v_scale, bool inverted,
-					 mesh_create_origin origin, bool hardware_copy = true);
+					 std::uint32_t depth_segments, mesh_create_origin origin, bool hardware_copy = true);
 
 	//-----------------------------------------------------------------------------
 	//  Name : create_sphere ()
@@ -567,8 +559,7 @@ public:
 	/// </summary>
 	//-----------------------------------------------------------------------------
 	bool create_sphere(const gfx::vertex_layout& format, float radius, std::uint32_t stacks,
-					   std::uint32_t slices, bool inverted, mesh_create_origin origin,
-					   bool hardware_copy = true);
+					   std::uint32_t slices, mesh_create_origin origin, bool hardware_copy = true);
 
 	//-----------------------------------------------------------------------------
 	//  Name : create_cylinder ()
@@ -577,8 +568,7 @@ public:
 	/// </summary>
 	//-----------------------------------------------------------------------------
 	bool create_cylinder(const gfx::vertex_layout& format, float radius, float height, std::uint32_t stacks,
-						 std::uint32_t slices, bool inverted, mesh_create_origin origin,
-						 bool hardware_copy = true);
+						 std::uint32_t slices, mesh_create_origin origin, bool hardware_copy = true);
 
 	//-----------------------------------------------------------------------------
 	//  Name : create_capsule ()
@@ -587,8 +577,7 @@ public:
 	/// </summary>
 	//-----------------------------------------------------------------------------
 	bool create_capsule(const gfx::vertex_layout& format, float radius, float height, std::uint32_t stacks,
-						std::uint32_t slices, bool inverted, mesh_create_origin origin,
-						bool hardware_copy = true);
+						std::uint32_t slices, mesh_create_origin origin, bool hardware_copy = true);
 
 	//-----------------------------------------------------------------------------
 	//  Name : create_cone ()
@@ -597,7 +586,7 @@ public:
 	/// </summary>
 	//-----------------------------------------------------------------------------
 	bool create_cone(const gfx::vertex_layout& format, float radius, float radiusTip, float height,
-					 std::uint32_t stacks, std::uint32_t slices, bool inverted, mesh_create_origin origin,
+					 std::uint32_t stacks, std::uint32_t slices, mesh_create_origin origin,
 					 bool hardware_copy = true);
 
 	//-----------------------------------------------------------------------------
@@ -607,7 +596,7 @@ public:
 	/// </summary>
 	//-----------------------------------------------------------------------------
 	bool create_torus(const gfx::vertex_layout& format, float outer_radius, float inner_radius,
-					  std::uint32_t bands, std::uint32_t sides, bool inverted, mesh_create_origin origin,
+					  std::uint32_t bands, std::uint32_t sides, mesh_create_origin origin,
 					  bool hardware_copy = true);
 
 	//-----------------------------------------------------------------------------
@@ -617,22 +606,6 @@ public:
 	/// </summary>
 	//-----------------------------------------------------------------------------
 	bool create_teapot(const gfx::vertex_layout& format, bool hardware_copy = true);
-
-	//-----------------------------------------------------------------------------
-	//  Name : create_tetrahedron ()
-	/// <summary>
-	/// Create tetrahedron geometry.
-	/// </summary>
-	//-----------------------------------------------------------------------------
-	bool create_tetrahedron(const gfx::vertex_layout& format, bool hardware_copy = true);
-
-	//-----------------------------------------------------------------------------
-	//  Name : create_octahedron ()
-	/// <summary>
-	/// Create octahedron geometry.
-	/// </summary>
-	//-----------------------------------------------------------------------------
-	bool create_octahedron(const gfx::vertex_layout& format, bool hardware_copy = true);
 
 	//-----------------------------------------------------------------------------
 	//  Name : create_icosahedron ()
@@ -767,7 +740,7 @@ public:
 	const bone_palette_array_t& get_bone_palettes() const;
 
 	const std::unique_ptr<armature_node>& get_armature() const;
-	irect calculate_screen_rect(const math::transform& world, const camera& cam) const;
+	irect32_t calculate_screen_rect(const math::transform& world, const camera& cam) const;
 	//-----------------------------------------------------------------------------
 	//  Name : get_subset ()
 	/// <summary>
@@ -788,7 +761,7 @@ public:
 	//-----------------------------------------------------------------------------
 	inline const math::bbox& get_bounds() const
 	{
-		return _bbox;
+		return bbox_;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -799,7 +772,7 @@ public:
 	//-----------------------------------------------------------------------------
 	inline mesh_status get_status() const
 	{
-		return _prepare_status;
+		return prepare_status_;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -810,10 +783,9 @@ public:
 	//-----------------------------------------------------------------------------
 	inline std::size_t get_subset_count() const
 	{
-		return _mesh_subsets.size();
+		return mesh_subsets_.size();
 	}
 
-protected:
 	//-------------------------------------------------------------------------
 	// Protected Structures, Typedefs and Enumerations
 	//-------------------------------------------------------------------------
@@ -865,7 +837,7 @@ protected:
 		bool compute_barycentric = false;
 
 	}; // End Struct preparation_data
-
+protected:
 	// mesh Sorting / Optimization structures
 	struct optimizer_vertex_info
 	{
@@ -1065,102 +1037,67 @@ protected:
 	//-------------------------------------------------------------------------
 	// Resource loading properties.
 	/// Should we force the re-generation of tangent space vectors?
-	bool _force_tangent_generation = false;
+	bool force_tangent_generation_ = false;
 	/// Should we force the re-generation of vertex normals?
-	bool _force_normal_generation = false;
+	bool force_normal_generation_ = false;
 	/// Should we force the re-generation of vertex barycentric coords?
-	bool _force_barycentric_generation = false;
+	bool force_barycentric_generation_ = false;
 	/// Allows derived classes to disable / enable the automatic re-sort operation
 	/// that happens during several operations
-	bool _disable_final_sort = false;
+	bool disable_final_sort_ = false;
 
 	// mesh data
 	/// The vertex data as it exists during data insertion (prior to the actual
 	/// build) and also used as the
 	/// system memory copy.
-	std::uint8_t* _system_vb = nullptr;
+	std::uint8_t* system_vb_ = nullptr;
 	/// Vertex format used for the mesh internal vertex data.
-	gfx::vertex_layout _vertex_format;
+	gfx::vertex_layout vertex_format_;
 	/// The final system memory copy of the index buffer.
-	std::uint32_t* _system_ib = nullptr;
+	std::uint32_t* system_ib_ = nullptr;
 	/// Material and data group information for each triangle.
-	subset_key_array_t _triangle_data;
+	subset_key_array_t triangle_data_;
 	/// After constructing the mesh, this will contain the actual hardware vertex
 	/// buffer resource
-	std::shared_ptr<gfx::vertex_buffer> _hardware_vb;
+	std::shared_ptr<void> hardware_vb_;
 	/// After constructing the mesh, this will contain the actual hardware index
 	/// buffer resource
-	std::shared_ptr<gfx::index_buffer> _hardware_ib;
+	std::shared_ptr<void> hardware_ib_;
 
 	// mesh data look up tables
 	/// The actual list of subsets maintained by this mesh.
-	subset_array_t _mesh_subsets;
+	subset_array_t mesh_subsets_;
 	/// A map containing lookup information which maps data groups to subsets
 	/// batched by material.
-	data_group_subset_map_t _data_groups;
+	data_group_subset_map_t data_groups_;
 	/// Quick binary tree lookup of existing subsets based on material AND data
 	/// group id.
-	subset_key_map_t _subset_lookup;
+	subset_key_map_t subset_lookup_;
 
 	// mesh properties
 	/// Does the mesh use a hardware vertex/index buffer?
-	bool _hardware_mesh = true;
+	bool hardware_mesh_ = true;
 	/// Was the mesh optimized when it was prepared?
-	bool _optimize_mesh = false;
+	bool optimize_mesh_ = false;
 	/// Axis aligned bounding box describing object dimensions (in object space)
-	math::bbox _bbox;
+	math::bbox bbox_;
 	/// Total number of faces in the prepared mesh.
-	std::uint32_t _face_count = 0;
+	std::uint32_t face_count_ = 0;
 	/// Total number of vertices in the prepared mesh.
-	std::uint32_t _vertex_count = 0;
+	std::uint32_t vertex_count_ = 0;
 
 	// mesh data preparation
 	/// Preparation status of the mesh (i.e. has it been constructed yet).
-	mesh_status _prepare_status = mesh_status::not_prepared;
+	mesh_status prepare_status_ = mesh_status::not_prepared;
 	/// Input data used for constructing the final mesh.
-	preparation_data _preparation_data;
+	preparation_data preparation_data_;
 
 	// Skin binding information
 	/// Data that describes how the mesh should be bound as a skin with supplied
 	/// bone matrices.
-	skin_bind_data _skin_bind_data;
+	skin_bind_data skin_bind_data_;
 	/// List of each of the unique combinations of bones to use during rendering.
-	bone_palette_array_t _bone_palettes;
+	bone_palette_array_t bone_palettes_;
 	/// List of each of armature nodes
-	std::unique_ptr<armature_node> _root = nullptr;
+	std::unique_ptr<armature_node> root_ = nullptr;
 };
-
-//-----------------------------------------------------------------------------
-// Global Operators
-//-----------------------------------------------------------------------------
-//-----------------------------------------------------------------------------
-//  Name : operator < () (adjacent_edge_key&, adjacent_edge_key&)
-/// <summary>
-/// Perform less than comparison on the adjacent_edge_key structure.
-/// </summary>
-//-----------------------------------------------------------------------------
-inline bool operator<(const mesh::adjacent_edge_key& key1, const mesh::adjacent_edge_key& key2);
-
-//-----------------------------------------------------------------------------
-//  Name : operator < () (mesh_subset_key&, mesh_subset_key&)
-/// <summary>
-/// Perform less than comparison on the mesh_subset_key structure.
-/// </summary>
-//-----------------------------------------------------------------------------
-inline bool operator<(const mesh::mesh_subset_key& key1, const mesh::mesh_subset_key& key2);
-
-//-----------------------------------------------------------------------------
-//  Name : operator < () (weld_key&, weld_key&)
-/// <summary>
-/// Perform less than comparison on the weld_key structure.
-/// </summary>
-//-----------------------------------------------------------------------------
-inline bool operator<(const mesh::weld_key& key1, const mesh::weld_key& key2);
-
-//-----------------------------------------------------------------------------
-//  Name : operator < () (bone_combination_key&, bone_combination_key&)
-/// <summary>
-/// Perform less than comparison on the bone_combination_key structure.
-/// </summary>
-//-----------------------------------------------------------------------------
-inline bool operator<(const mesh::bone_combination_key& key1, const mesh::bone_combination_key& key2);

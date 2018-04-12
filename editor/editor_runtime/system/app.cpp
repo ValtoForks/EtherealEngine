@@ -2,12 +2,12 @@
 #include "../console/console_log.h"
 #include "../editing/editing_system.h"
 #include "../editing/picking_system.h"
-#include "../interface/docks/project_dock.h"
 #include "../interface/docks/console_dock.h"
 #include "../interface/docks/docking.h"
 #include "../interface/docks/game_dock.h"
 #include "../interface/docks/hierarchy_dock.h"
 #include "../interface/docks/inspector_dock.h"
+#include "../interface/docks/project_dock.h"
 #include "../interface/docks/scene_dock.h"
 #include "../interface/docks/style_dock.h"
 #include "../interface/gui_system.h"
@@ -17,7 +17,6 @@
 #include "core/logging/logging.h"
 #include "editor_core/nativefd/filedialog.h"
 #include "runtime/assets/asset_manager.h"
-#include "runtime/assets/impl/asset_extensions.h"
 #include "runtime/ecs/components/camera_component.h"
 #include "runtime/ecs/components/light_component.h"
 #include "runtime/ecs/components/model_component.h"
@@ -31,7 +30,26 @@
 #include "runtime/system/events.h"
 namespace editor
 {
+namespace
+{
+template <typename T>
+void create_window_with_dock(const std::string& dock_name)
+{
+	auto& rend = core::get_subsystem<runtime::renderer>();
+	auto& docking = core::get_subsystem<docking_system>();
+	mml::video_mode desktop = mml::video_mode::get_desktop_mode();
+	desktop.width = 1280;
+	desktop.height = 720;
+	auto window = std::make_unique<render_window>(desktop, "App", mml::style::standard);
+	window->request_focus();
 
+	auto dock = std::make_unique<T>(dock_name, true, ImVec2(200.0f, 200.0f));
+
+	auto& dockspace = docking.get_dockspace(window->get_id());
+	dockspace.dock_to(dock.get(), imguidock::slot::tab, 200, true);
+	rend.register_window(std::move(window));
+	docking.register_dock(std::move(dock));
+}
 std::vector<runtime::entity> gather_scene_data()
 {
 	auto& es = core::get_subsystem<editor::editing_system>();
@@ -56,41 +74,46 @@ void default_scene()
 	{
 		auto object = ecs.create();
 		object.set_name("main camera");
-		object.assign<transform_component>().lock()->set_local_position({0.0f, 2.0f, -5.0f});
+		auto transf_comp = object.assign<transform_component>().lock();
+		transf_comp->set_local_position({0.0f, 2.0f, -5.0f});
 		object.assign<camera_component>();
 	}
 	{
 		auto object = ecs.create();
 		object.set_name("light");
-		object.assign<transform_component>()
-			.lock()
-			->set_local_position({1.0f, 6.0f, -3.0f})
-			.rotate_local(50.0f, -30.0f, 0.0f);
+		auto transf_comp = object.assign<transform_component>().lock();
+		transf_comp->set_local_position({1.0f, 6.0f, -3.0f});
+		transf_comp->rotate_local(50.0f, -30.0f, 0.0f);
 
 		light light_data;
 		light_data.color = math::color(255, 244, 214, 255);
-		object.assign<light_component>().lock()->set_light(light_data);
+		auto light_comp = object.assign<light_component>().lock();
+		light_comp->set_light(light_data);
 	}
 	{
 		auto object = ecs.create();
 		object.set_name("global probe");
-		object.assign<transform_component>().lock()->set_local_position({0.0f, 0.1f, 0.0f});
+		auto transf_comp = object.assign<transform_component>().lock();
+		transf_comp->set_local_position({0.0f, 0.1f, 0.0f});
 
 		reflection_probe probe;
 		probe.method = reflect_method::environment;
 		probe.type = probe_type::sphere;
 		probe.sphere_data.range = 1000.0f;
-		object.assign<reflection_probe_component>().lock()->set_probe(probe);
+		auto reflect_comp = object.assign<reflection_probe_component>().lock();
+		reflect_comp->set_probe(probe);
 	}
 	{
 		auto object = ecs.create();
 		object.set_name("local probe");
-		object.assign<transform_component>().lock()->set_local_position({0.0f, 0.1f, 0.0f});
+		auto transf_comp = object.assign<transform_component>().lock();
+		transf_comp->set_local_position({0.0f, 0.1f, 0.0f});
 
 		reflection_probe probe;
 		probe.method = reflect_method::static_only;
 		probe.type = probe_type::box;
-		object.assign<reflection_probe_component>().lock()->set_probe(probe);
+		auto reflect_comp = object.assign<reflection_probe_component>().lock();
+		reflect_comp->set_probe(probe);
 	}
 	{
 		auto object = ecs.create();
@@ -102,27 +125,33 @@ void default_scene()
 		model.set_lod(asset_future.get(), 0);
 
 		// Add component and configure it.
-		object.assign<model_component>().lock()->set_casts_shadow(true).set_casts_reflection(true).set_model(
-			model);
+		auto model_comp = object.assign<model_component>().lock();
+		model_comp->set_casts_shadow(true);
+		model_comp->set_casts_reflection(true);
+		model_comp->set_model(model);
 	}
 	{
 		auto object = ecs.create();
 		object.set_name("object");
-		object.assign<transform_component>().lock()->set_local_position({-2.0f, 0.5f, 0.0f});
+		auto transf_comp = object.assign<transform_component>().lock();
+		transf_comp->set_local_position({-2.0f, 0.5f, 0.0f});
 
 		auto asset_future = am.load<mesh>("embedded:/sphere");
 		model model;
 		model.set_lod(asset_future.get(), 0);
 
 		// Add component and configure it.
-		object.assign<model_component>().lock()->set_casts_shadow(true).set_casts_reflection(false).set_model(
-			model);
+		auto model_comp = object.assign<model_component>().lock();
+		model_comp->set_casts_shadow(true);
+		model_comp->set_casts_reflection(false);
+		model_comp->set_model(model);
 	}
 
 	{
 		auto object = ecs.create();
 		object.set_name("object_with_lods");
-		object.assign<transform_component>().lock()->set_local_position({2.0f, 1.0f, 0.0f});
+		auto transf_comp = object.assign<transform_component>().lock();
+		transf_comp->set_local_position({2.0f, 1.0f, 0.0f});
 
 		model model;
 		{
@@ -138,8 +167,10 @@ void default_scene()
 			model.set_lod(asset_future.get(), 2);
 		}
 		// Add component and configure it.
-		object.assign<model_component>().lock()->set_casts_shadow(true).set_casts_reflection(false).set_model(
-			model);
+		auto model_comp = object.assign<model_component>().lock();
+		model_comp->set_casts_shadow(true);
+		model_comp->set_casts_reflection(false);
+		model_comp->set_model(model);
 	}
 }
 
@@ -161,8 +192,7 @@ auto open_scene()
 	es.save_editor_camera();
 
 	std::string path;
-	if(native::open_file_dialog(extensions::scene.substr(1), fs::resolve_protocol("app:/data").string(),
-								path))
+	if(native::open_file_dialog("sgr", fs::resolve_protocol("app:/data").string(), path))
 	{
 		auto scene_path = fs::convert_to_protocol(path);
 		auto scene = am.load<::scene>(scene_path.string()).get();
@@ -191,36 +221,17 @@ void save_scene_as()
 	auto& es = core::get_subsystem<editor::editing_system>();
 
 	std::string path;
-	if(native::save_file_dialog(extensions::scene.substr(1), fs::resolve_protocol("app:/data").string(),
-								path))
+	if(native::save_file_dialog("sgr", fs::resolve_protocol("app:/data").string(), path))
 	{
 		es.scene = path;
 		if(!fs::path(path).has_extension())
-			es.scene += extensions::scene;
+			es.scene += ".sgr";
 
 		save_scene();
 	}
 
 	es.save_editor_camera();
 }
-
-template <typename T>
-void create_window_with_dock(const std::string& dock_name)
-{
-	auto& rend = core::get_subsystem<runtime::renderer>();
-	auto& docking = core::get_subsystem<docking_system>();
-	mml::video_mode desktop = mml::video_mode::get_desktop_mode();
-	desktop.width = 1280;
-	desktop.height = 720;
-	auto window = std::make_unique<render_window>(desktop, "App", mml::style::standard);
-	window->request_focus();
-
-	auto dock = std::make_unique<T>(dock_name, true, ImVec2(200.0f, 200.0f));
-
-	auto& dockspace = docking.get_dockspace(window->get_id());
-	dockspace.dock_to(dock.get(), imguidock::slot::tab, 200, true);
-	rend.register_window(std::move(window));
-	docking.register_dock(std::move(dock));
 }
 
 void app::draw_menubar(render_window& window)
@@ -229,7 +240,7 @@ void app::draw_menubar(render_window& window)
 	auto& pm = core::get_subsystem<editor::project_manager>();
 	auto& rend = core::get_subsystem<runtime::renderer>();
 	auto& input = core::get_subsystem<runtime::input>();
-	const auto& current_project = pm.get_current_project();
+	const auto& current_project = pm.get_name();
 
 	if(input.is_key_down(mml::keyboard::LControl))
 	{
@@ -270,7 +281,7 @@ void app::draw_menubar(render_window& window)
 			}
 			if(gui::MenuItem("SHOW START PAGE", "CTRL+P"))
 			{
-				_show_start_page = true;
+				show_start_page_ = true;
 				rend.hide_all_secondary_windows();
 				pm.close_project();
 				window.restore();
@@ -417,11 +428,10 @@ void app::setup(cmd_line::parser& parser)
 
 void app::start(cmd_line::parser& parser)
 {
+	console_log_ = std::make_shared<console_log>();
+
 	auto logging_container = logging::get_mutable_logging_container();
-
-	_console_log = std::make_shared<console_log>();
-
-	logging_container->add_sink(_console_log);
+	logging_container->add_sink(console_log_);
 
 	runtime::app::start(parser);
 
@@ -432,18 +442,24 @@ void app::start(cmd_line::parser& parser)
 	core::add_subsystem<debugdraw_system>();
 	core::add_subsystem<project_manager>();
 
+	create_docks();
+	register_console_commands();
+}
+
+void app::create_docks()
+{
 	auto& rend = core::get_subsystem<runtime::renderer>();
 	auto& main_window = rend.get_main_window();
-    
-    main_window->set_title("Ethereal");
 
-	_console_dock_name = "CONSOLE";
+	main_window->set_title("ETHEREAL");
+
+	console_dock_name_ = "CONSOLE";
 	auto scene = std::make_unique<scene_dock>("SCENE", true, ImVec2(200.0f, 200.0f));
 	auto game = std::make_unique<game_dock>("GAME", true, ImVec2(300.0f, 200.0f));
 	auto hierarchy = std::make_unique<hierarchy_dock>("HIERARCHY", true, ImVec2(300.0f, 200.0f));
 	auto inspector = std::make_unique<inspector_dock>("INSPECTOR", true, ImVec2(300.0f, 200.0f));
 	auto project = std::make_unique<project_dock>("PROJECT", true, ImVec2(200.0f, 200.0f));
-	auto console = std::make_unique<console_dock>("CONSOLE", true, ImVec2(200.0f, 200.0f), _console_log);
+	auto console = std::make_unique<console_dock>("CONSOLE", true, ImVec2(200.0f, 200.0f), console_log_);
 	auto style = std::make_unique<style_dock>("STYLE", true, ImVec2(300.0f, 200.0f));
 
 	auto& docking = core::get_subsystem<docking_system>();
@@ -463,9 +479,12 @@ void app::start(cmd_line::parser& parser)
 	docking.register_dock(std::move(console));
 	docking.register_dock(std::move(project));
 	docking.register_dock(std::move(style));
+}
 
+void app::register_console_commands()
+{
 	std::function<void()> log_version = []() { APPLOG_INFO("Version 1.0"); };
-	_console_log->register_command("version", "Returns the current version of the Editor.", {}, {},
+	console_log_->register_command("version", "Returns the current version of the Editor.", {}, {},
 								   log_version);
 }
 
@@ -476,7 +495,7 @@ void app::stop()
 	runtime::app::stop();
 }
 
-void app::draw_docks(std::chrono::duration<float> dt)
+void app::draw_docks(delta_t dt)
 {
 	auto& gui = core::get_subsystem<gui_system>();
 	auto& docking = core::get_subsystem<docking_system>();
@@ -493,9 +512,9 @@ void app::draw_docks(std::chrono::duration<float> dt)
 		gui.push_context(id);
 		gui.draw_begin(*window, dt);
 
-		gui::PushFont(gui::GetFont("standard"));
+		gui::PushFont("standard");
 
-		if(_show_start_page)
+		if(show_start_page_)
 		{
 			draw_start_page(*window);
 		}
@@ -539,12 +558,12 @@ void app::draw_dockspace(bool is_main, render_window& window, imguidock::dockspa
 
 void app::draw_footer(render_window&, imguidock::dockspace& dockspace)
 {
-	if(!_console_log)
+	if(!console_log_)
 		return;
 
 	auto& ts = core::get_subsystem<core::task_system>();
 	const auto tasks_info = ts.get_info();
-	const auto items = _console_log->get_items();
+	const auto items = console_log_->get_items();
 
 	const auto total_width = gui::GetContentRegionAvailWidth();
 	gui::Columns(2, "footer");
@@ -553,7 +572,7 @@ void app::draw_footer(render_window&, imguidock::dockspace& dockspace)
 	if(items.size() > 0)
 	{
 		const auto& last_item = items.back();
-		const auto& colorization = _console_log->get_level_colorization(last_item.second);
+		const auto& colorization = console_log_->get_level_colorization(last_item.second);
 		ImVec4 col = {colorization[0], colorization[1], colorization[2], colorization[3]};
 
 		gui::SetCursorPosY(ImGui::GetCursorPosY());
@@ -561,17 +580,18 @@ void app::draw_footer(render_window&, imguidock::dockspace& dockspace)
 		gui::AlignTextToFramePadding();
 		if(gui::Selectable(last_item.first.c_str(), false, 0, ImVec2(0, gui::GetTextLineHeight())))
 		{
-			dockspace.activate_dock(_console_dock_name);
+			dockspace.activate_dock(console_dock_name_);
 		}
 		gui::PopStyleColor();
 	}
 	gui::NextColumn();
 	if(tasks_info.pending_tasks > 0)
 	{
-		gui::PushFont(gui::GetFont("icons"));
+		gui::PushFont("icons");
 		gui::AlignTextToFramePadding();
-		gui::Text(ICON_FA_TASKS " : %u", unsigned(tasks_info.pending_tasks));
-		if(gui::IsItemHovered())
+		gui::Text(ICON_FA_TASKS " Queued tasks : (%u)", unsigned(tasks_info.pending_tasks));
+		auto& g = *gui::GetCurrentContext();
+		if(!g.DragDropActive && gui::IsItemHovered())
 		{
 			gui::BeginTooltip();
 			int idx = 0;
@@ -600,7 +620,7 @@ void app::draw_start_page(render_window& window)
 		pm.create_project(path);
 		window.maximize();
 		rend.show_all_secondary_windows();
-		_show_start_page = false;
+		show_start_page_ = false;
 	};
 	auto on_open_project = [&](const std::string& p) {
 		auto& rend = core::get_subsystem<runtime::renderer>();
@@ -608,10 +628,10 @@ void app::draw_start_page(render_window& window)
 		pm.open_project(path);
 		window.maximize();
 		rend.show_all_secondary_windows();
-		_show_start_page = false;
+		show_start_page_ = false;
 	};
 
-	gui::PushFont(gui::GetFont("standard_big"));
+	gui::PushFont("standard_big");
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove |
 							 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_HorizontalScrollbar |
 							 ImGuiWindowFlags_NoSavedSettings;
@@ -669,27 +689,12 @@ void app::handle_drag_and_drop()
 {
 	auto& es = core::get_subsystem<editing_system>();
 
-	if(gui::IsMouseDragging(gui::drag_button) && es.drag_data.object)
-	{
-		gui::BeginTooltip();
-		gui::TextUnformatted(es.drag_data.description.c_str());
-		gui::EndTooltip();
-
-		// if(gui::GetMouseCursor() == ImGuiMouseCursor_Arrow)
-		//	gui::SetMouseCursor(ImGuiMouseCursor_NotAllowed);
-	}
-
 	if(!gui::IsAnyItemActive() && !gui::IsAnyItemHovered())
 	{
 		if(gui::IsMouseDoubleClicked(0) && !imguizmo::is_over())
 		{
 			es.unselect();
-			es.drop();
 		}
-	}
-	if(gui::IsMouseReleased(gui::drag_button))
-	{
-		es.drop();
 	}
 }
 }

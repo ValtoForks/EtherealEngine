@@ -1,4 +1,5 @@
 #include "inspector_assets.h"
+#include "../../assets/asset_extensions.h"
 #include "../../editing/editing_system.h"
 #include "core/audio/sound.h"
 #include "core/filesystem/filesystem.h"
@@ -7,9 +8,53 @@
 #include "inspectors.h"
 #include "runtime/animation/animation.h"
 #include "runtime/assets/asset_manager.h"
+#include "runtime/assets/impl/asset_writer.h"
 #include "runtime/ecs/constructs/prefab.h"
 #include "runtime/rendering/material.h"
 #include "runtime/rendering/mesh.h"
+
+template <typename asset_t>
+static bool process_drag_drop_target(asset_handle<asset_t>& entry)
+{
+	auto& am = core::get_subsystem<runtime::asset_manager>();
+
+	if(gui::BeginDragDropTarget())
+	{
+		if(gui::IsDragDropPayloadBeingAccepted())
+		{
+			gui::SetMouseCursor(ImGuiMouseCursor_Hand);
+		}
+		else
+		{
+			gui::SetMouseCursor(ImGuiMouseCursor_NotAllowed);
+		}
+
+		for(const auto& type : ex::get_suported_formats<asset_t>())
+		{
+			auto payload = gui::AcceptDragDropPayload(type.c_str());
+			if(payload)
+			{
+				std::string absolute_path(reinterpret_cast<const char*>(payload->Data),
+										  std::size_t(payload->DataSize));
+
+				std::string key = fs::convert_to_protocol(fs::path(absolute_path)).string();
+				auto entry_future = am.find_asset_entry<asset_t>(key);
+				if(entry_future.is_ready())
+				{
+					entry = entry_future.get();
+				}
+
+				if(entry)
+				{
+					return true;
+				}
+			}
+		}
+		gui::EndDragDropTarget();
+	}
+	return false;
+	;
+}
 
 bool inspector_asset_handle_texture::inspect(rttr::variant& var, bool read_only,
 											 const meta_getter& get_metadata)
@@ -20,42 +65,57 @@ bool inspector_asset_handle_texture::inspect(rttr::variant& var, bool read_only,
 	auto& selected = es.selection_data.object;
 	bool is_selected = selected && selected.is_type<asset_handle<gfx::texture>>();
 	bool changed = false;
+
 	float available = math::min(64.0f, gui::GetContentRegionAvailWidth() / 1.5f);
+
 	if(is_selected)
+	{
 		available = gui::GetContentRegionAvailWidth();
-
-	ImVec2 size = {available, available};
-	if(data)
-	{
-		auto asset_sz = data.link->asset->get_size();
-		float w = float(asset_sz.width);
-		float h = float(asset_sz.height);
-		const auto tex = data.link->asset;
-		bool is_rt = tex ? tex->is_render_target() : false;
-		bool is_orig_bl = gfx::is_origin_bottom_left();
-		gui::ImageWithAspect(tex, is_rt, is_orig_bl, ImVec2(w, h), size);
 	}
-	else
-	{
 
-		ImGuiWindow* window = gui::GetCurrentWindow();
-		if(window->SkipItems)
-			return false;
-		ImRect bb(window->DC.CursorPos,
-				  ImVec2(window->DC.CursorPos.x + size.x, window->DC.CursorPos.y + size.y));
-		gui::ItemSize(bb);
-		if(!gui::ItemAdd(bb, 0))
-			return false;
-	}
-	gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 1.0f);
-	bool hoveredFrame = gui::IsItemHoveredRect();
-	auto bbMinFrame = gui::GetItemRectMin();
-	auto bbMaxFrame = gui::GetItemRectMax();
+	auto draw_image = [&]() {
+		ImVec2 size = {available, available};
+		if(data)
+		{
+			auto asset_sz = data.link->asset->get_size();
+			float w = float(asset_sz.width);
+			float h = float(asset_sz.height);
+			const auto tex = data.link->asset;
+			gui::ImageWithAspect(gui::get_info(tex), ImVec2(w, h), size);
+		}
+		else
+		{
+
+			ImGuiWindow* window = gui::GetCurrentWindow();
+			if(window->SkipItems)
+				return false;
+			ImRect bb(window->DC.CursorPos,
+					  ImVec2(window->DC.CursorPos.x + size.x, window->DC.CursorPos.y + size.y));
+			gui::ItemSize(bb);
+			if(!gui::ItemAdd(bb, 0))
+				return false;
+
+			gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 1.0f);
+		}
+		return true;
+	};
 
 	if(selected && !selected.is_type<asset_handle<gfx::texture>>())
 	{
+
+		if(!draw_image())
+		{
+			return false;
+		}
+
+		if(process_drag_drop_target(data))
+		{
+			var = data;
+			changed = true;
+		}
+
 		gui::SameLine();
-		if(gui::Button("REMOVE"))
+		if(gui::Button("CLEAR"))
 		{
 			data = asset_handle<gfx::texture>();
 			var = data;
@@ -81,47 +141,38 @@ bool inspector_asset_handle_texture::inspect(rttr::variant& var, bool read_only,
 			var = data;
 			changed = true;
 		}
-		if((!gui::IsItemActive() && gui::IsItemHovered()) || hoveredFrame)
+
+		if(process_drag_drop_target(data))
 		{
-			// gui::SetMouseCursor(ImGuiMouseCursor_Help);
-			gui::BeginTooltip();
-			gui::TextUnformatted("YOU CAN DRAG AND DROP HERE");
-			gui::EndTooltip();
+			var = data;
+			changed = true;
 		}
 
-		auto& dragged = es.drag_data.object;
-		if(dragged && dragged.is_type<asset_handle<gfx::texture>>())
-		{
-			gui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.5f, 0.0f, 0.9f));
-			gui::RenderFrameEx(bbMinFrame, bbMaxFrame, true, 0.0f, 1.0f);
-			gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 1.0f);
-			gui::PopStyleColor();
-
-			if(hoveredFrame || gui::IsItemHoveredRect())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				gui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-				gui::RenderFrameEx(bbMinFrame, bbMaxFrame, true, 0.0f, 2.0f);
-				gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 2.0f);
-				gui::PopStyleColor();
-
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					data = dragged.get_value<asset_handle<gfx::texture>>();
-					var = data;
-					changed = true;
-				}
-			}
-		}
 		return changed;
 	}
 
-	if(data)
+	gui::BeginTabBar("asset_handle_texture", ImGuiTabBarFlags_SizingPolicyEqual | ImGuiTabBarFlags_NoReorder |
+												 ImGuiTabBarFlags_NoCloseWithMiddleMouseButton);
+
+	if(gui::TabItem("Info"))
 	{
-		auto info = data.get()->info;
-		rttr::variant vari = info;
-		changed |= inspect_var(vari);
+		if(!draw_image())
+		{
+			return false;
+		}
+		if(data)
+		{
+			auto info = data.get()->info;
+			rttr::variant vari = info;
+			changed |= inspect_var(vari);
+		}
 	}
+	if(gui::TabItem("Import"))
+	{
+		gui::TextUnformatted("Import options");
+	}
+	gui::EndTabBar();
+
 	return changed;
 }
 
@@ -156,33 +207,18 @@ bool inspector_asset_handle_material::inspect(rttr::variant& var, bool read_only
 			return true;
 		}
 
-		auto& dragged = es.drag_data.object;
-		if(dragged && dragged.is_type<asset_handle<material>>())
+		if(process_drag_drop_target(data))
 		{
-			gui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.5f, 0.0f, 0.9f));
-			gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 1.0f);
-			gui::PopStyleColor();
-
-			if(gui::IsItemHoveredRect())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				gui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-				gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 2.0f);
-				gui::PopStyleColor();
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					data = dragged.get_value<asset_handle<material>>();
-					var = data;
-					return true;
-				}
-			}
+			var = data;
+			return true;
 		}
+
 		return false;
 	}
 
 	if(gui::Button("SAVE CHANGES##top", ImVec2(-1, 0)))
 	{
-		am.save(data);
+		runtime::asset_writer::save_to_file(data.id(), data);
 	}
 	gui::Separator();
 	bool changed = false;
@@ -193,7 +229,7 @@ bool inspector_asset_handle_material::inspect(rttr::variant& var, bool read_only
 	gui::Separator();
 	if(gui::Button("SAVE CHANGES##bottom", ImVec2(-1, 0)))
 	{
-		am.save(data);
+		runtime::asset_writer::save_to_file(data.id(), data);
 	}
 	return changed;
 }
@@ -227,42 +263,37 @@ bool inspector_asset_handle_mesh::inspect(rttr::variant& var, bool read_only, co
 			var = data;
 			return true;
 		}
-
-		auto& dragged = es.drag_data.object;
-		if(dragged && dragged.is_type<asset_handle<mesh>>())
+		if(process_drag_drop_target(data))
 		{
-			gui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.5f, 0.0f, 0.9f));
-			gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 1.0f);
-			gui::PopStyleColor();
-
-			if(gui::IsItemHoveredRect())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				gui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-				gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 2.0f);
-				gui::PopStyleColor();
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					data = dragged.get_value<asset_handle<mesh>>();
-					var = data;
-					return true;
-				}
-			}
+			var = data;
+			return true;
 		}
 		return false;
 	}
 
 	bool changed = false;
 
-	if(data)
+	gui::BeginTabBar("asset_handle_mesh", ImGuiTabBarFlags_SizingPolicyEqual | ImGuiTabBarFlags_NoReorder |
+											  ImGuiTabBarFlags_NoCloseWithMiddleMouseButton);
+
+	if(gui::TabItem("Info"))
 	{
-		mesh::info info;
-		info.vertices = data->get_vertex_count();
-		info.primitives = data->get_face_count();
-		info.subsets = static_cast<std::uint32_t>(data->get_subset_count());
-		rttr::variant vari = info;
-		changed |= inspect_var(vari);
+		if(data)
+		{
+			mesh::info info;
+			info.vertices = data->get_vertex_count();
+			info.primitives = data->get_face_count();
+			info.subsets = static_cast<std::uint32_t>(data->get_subset_count());
+			rttr::variant vari = info;
+			changed |= inspect_var(vari);
+		}
 	}
+	if(gui::TabItem("Import"))
+	{
+		gui::TextUnformatted("Import options");
+	}
+	gui::EndTabBar();
+
 	return changed;
 }
 
@@ -296,27 +327,10 @@ bool inspector_asset_handle_animation::inspect(rttr::variant& var, bool read_onl
 			var = data;
 			return true;
 		}
-
-		auto& dragged = es.drag_data.object;
-		if(dragged && dragged.is_type<asset_handle<runtime::animation>>())
+		if(process_drag_drop_target(data))
 		{
-			gui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.5f, 0.0f, 0.9f));
-			gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 1.0f);
-			gui::PopStyleColor();
-
-			if(gui::IsItemHoveredRect())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				gui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-				gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 2.0f);
-				gui::PopStyleColor();
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					data = dragged.get_value<asset_handle<runtime::animation>>();
-					var = data;
-					return true;
-				}
-			}
+			var = data;
+			return true;
 		}
 		return false;
 	}
@@ -328,6 +342,7 @@ bool inspector_asset_handle_animation::inspect(rttr::variant& var, bool read_onl
 		rttr::variant vari = data.get();
 		changed |= inspect_var(vari);
 	}
+
 	return changed;
 }
 
@@ -362,37 +377,33 @@ bool inspector_asset_handle_sound::inspect(rttr::variant& var, bool read_only,
 			return true;
 		}
 
-		auto& dragged = es.drag_data.object;
-		if(dragged && dragged.is_type<asset_handle<audio::sound>>())
+		if(process_drag_drop_target(data))
 		{
-			gui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.5f, 0.0f, 0.9f));
-			gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 1.0f);
-			gui::PopStyleColor();
-
-			if(gui::IsItemHoveredRect())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				gui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-				gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 2.0f);
-				gui::PopStyleColor();
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					data = dragged.get_value<asset_handle<audio::sound>>();
-					var = data;
-					return true;
-				}
-			}
+			var = data;
+			return true;
 		}
 		return false;
 	}
 
 	bool changed = false;
 
-	if(data)
+	gui::BeginTabBar("asset_handle_sound", ImGuiTabBarFlags_SizingPolicyEqual | ImGuiTabBarFlags_NoReorder |
+											   ImGuiTabBarFlags_NoCloseWithMiddleMouseButton);
+
+	if(gui::TabItem("Info"))
 	{
-		rttr::variant vari = data.get()->get_info();
-		changed |= inspect_var(vari);
+		if(data)
+		{
+			rttr::variant vari = data.get()->get_info();
+			changed |= inspect_var(vari);
+		}
 	}
+	if(gui::TabItem("Import"))
+	{
+		gui::TextUnformatted("Import options");
+	}
+	gui::EndTabBar();
+
 	return changed;
 }
 
@@ -427,26 +438,10 @@ bool inspector_asset_handle_prefab::inspect(rttr::variant& var, bool read_only,
 			return true;
 		}
 
-		auto& dragged = es.drag_data.object;
-		if(dragged && dragged.is_type<asset_handle<prefab>>())
+		if(process_drag_drop_target(data))
 		{
-			gui::PushStyleColor(ImGuiCol_Border, ImVec4(0.8f, 0.5f, 0.0f, 0.9f));
-			gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 1.0f);
-			gui::PopStyleColor();
-
-			if(gui::IsItemHoveredRect())
-			{
-				gui::SetMouseCursor(ImGuiMouseCursor_Move);
-				gui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-				gui::RenderFrameEx(gui::GetItemRectMin(), gui::GetItemRectMax(), true, 0.0f, 2.0f);
-				gui::PopStyleColor();
-				if(gui::IsMouseReleased(gui::drag_button))
-				{
-					data = dragged.get_value<asset_handle<prefab>>();
-					var = data;
-					return true;
-				}
-			}
+			var = data;
+			return true;
 		}
 		return false;
 	}

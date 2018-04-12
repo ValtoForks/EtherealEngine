@@ -10,33 +10,39 @@ model::model()
 {
 	auto& am = core::get_subsystem<runtime::asset_manager>();
 	auto standard = am.load<material>("embedded:/standard");
-	_default_material = standard.get();
+	default_material_ = standard.get();
 }
 
 bool model::is_valid() const
 {
-	return !_mesh_lods.empty();
+	return !mesh_lods_.empty();
 }
 
 asset_handle<mesh> model::get_lod(std::uint32_t lod) const
 {
-	if(_mesh_lods.size() > lod)
+	if(mesh_lods_.size() > lod)
 	{
-		auto lodMesh = _mesh_lods[lod];
+		auto lodMesh = mesh_lods_[lod];
 		if(lodMesh)
-			return lodMesh;
-
-		for(unsigned int i = lod; i < _mesh_lods.size(); ++i)
 		{
-			auto lodMesh = _mesh_lods[i];
+			return lodMesh;
+		}
+
+		for(unsigned int i = lod; i < mesh_lods_.size(); ++i)
+		{
+			auto lodMesh = mesh_lods_[i];
 			if(lodMesh)
+			{
 				return lodMesh;
+			}
 		}
 		for(unsigned int i = lod; i > 0; --i)
 		{
-			auto lodMesh = _mesh_lods[i];
+			auto lodMesh = mesh_lods_[i];
 			if(lodMesh)
+			{
 				return lodMesh;
+			}
 		}
 	}
 	return asset_handle<mesh>();
@@ -44,74 +50,82 @@ asset_handle<mesh> model::get_lod(std::uint32_t lod) const
 
 void model::set_lod(asset_handle<mesh> mesh, std::uint32_t lod)
 {
-	if(lod >= _mesh_lods.size())
+	if(lod >= mesh_lods_.size())
 	{
-		_mesh_lods.resize(lod + 1);
+		mesh_lods_.resize(lod + 1);
 		recalulate_lod_limits();
 	}
-	_mesh_lods[lod] = mesh;
+	mesh_lods_[lod] = mesh;
 
-	if(_materials.size() != mesh->get_subset_count())
+	if(materials_.size() != mesh->get_subset_count())
 	{
-		_materials.resize(mesh->get_subset_count(), _default_material);
+		materials_.resize(mesh->get_subset_count(), default_material_);
 	}
 }
 
 void model::set_material(asset_handle<material> material, std::uint32_t index)
 {
-	if(index >= _mesh_lods.size())
-		_mesh_lods.resize(index + 1);
+	if(index >= mesh_lods_.size())
+	{
+		mesh_lods_.resize(index + 1);
+	}
 
-	_materials[index] = material;
+	materials_[index] = material;
 }
 
 const std::vector<asset_handle<mesh>>& model::get_lods() const
 {
-	return _mesh_lods;
+	return mesh_lods_;
 }
 
 void model::set_lods(const std::vector<asset_handle<mesh>>& lods)
 {
 	auto sz1 = lods.size();
-	auto sz2 = _mesh_lods.size();
+	auto sz2 = mesh_lods_.size();
 
-	_mesh_lods = lods;
+	mesh_lods_ = lods;
 
 	if(sz1 != sz2)
-		recalulate_lod_limits();
-
-	if(_mesh_lods.size() > 0)
 	{
-		auto& mesh = _mesh_lods[0];
+		recalulate_lod_limits();
+	}
+
+	if(!mesh_lods_.empty())
+	{
+		auto& mesh = mesh_lods_[0];
 		if(mesh)
 		{
-			if(_materials.size() != mesh->get_subset_count())
-				_materials.resize(mesh->get_subset_count(), _default_material);
+			if(materials_.size() != mesh->get_subset_count())
+			{
+				materials_.resize(mesh->get_subset_count(), default_material_);
+			}
 		}
 	}
 }
 
 const std::vector<asset_handle<material>>& model::get_materials() const
 {
-	return _materials;
+	return materials_;
 }
 
 void model::set_materials(const std::vector<asset_handle<material>>& materials)
 {
-	_materials = materials;
+	materials_ = materials;
 }
 
 asset_handle<material> model::get_material_for_group(const size_t& group) const
 {
-	if(_materials.size() <= group)
-		return asset_handle<material>();
+	if(materials_.size() <= group)
+	{
+		return {};
+	}
 
-	return _materials[group];
+	return materials_[group];
 }
 
-void model::set_lod_limits(const std::vector<urange>& limits)
+void model::set_lod_limits(const std::vector<urange32_t>& limits)
 {
-	_lod_limits = limits;
+	lod_limits_ = limits;
 }
 
 void model::render(gfx::view_id id, const math::transform& world_transform,
@@ -121,10 +135,12 @@ void model::render(gfx::view_id id, const math::transform& world_transform,
 {
 	const auto mesh = get_lod(lod);
 	if(!mesh)
+	{
 		return;
+	}
 
 	auto render_subset = [this, &mesh](gfx::view_id id, bool skinned, std::uint32_t group_id,
-									   const float* mtx, std::uint32_t count, bool apply_cull,
+									   const std::vector<math::transform>& matrices, bool apply_cull,
 									   bool depth_write, bool depth_test, std::uint64_t extra_states,
 									   gpu_program* user_program,
 									   std::function<void(gpu_program&)> setup_params) {
@@ -136,24 +152,26 @@ void model::render(gfx::view_id id, const math::transform& world_transform,
 		if(mat)
 		{
 			mat->skinned = skinned;
-			if(!user_program)
+			if(user_program == nullptr)
 			{
 				program = mat->get_program();
 			}
 		}
 
-		if(program)
+		if(program != nullptr)
 		{
 			valid_program = program->begin();
 			if(valid_program)
+			{
 				setup_params(*program);
+			}
 		}
 
 		if(valid_program)
 		{
 			if(mat)
 			{
-				if(!user_program)
+				if(user_program == nullptr)
 				{
 					mat->submit();
 				}
@@ -161,8 +179,17 @@ void model::render(gfx::view_id id, const math::transform& world_transform,
 				extra_states |= mat->get_render_states(apply_cull, depth_write, depth_test);
 			}
 
-			if(mtx != nullptr)
-				gfx::set_transform(mtx, static_cast<std::uint16_t>(count));
+			if(!matrices.empty())
+			{
+				using mat_type = math::transform::mat4_t;
+				std::vector<mat_type> mats;
+				mats.reserve(matrices.size());
+				for(const auto& m : matrices)
+				{
+					mats.emplace_back(m.get_matrix());
+				}
+				gfx::set_transform(mats.data(), static_cast<std::uint16_t>(mats.size()));
+			}
 
 			gfx::set_state(extra_states);
 
@@ -171,7 +198,7 @@ void model::render(gfx::view_id id, const math::transform& world_transform,
 			gfx::submit(id, program->native_handle());
 		}
 
-		if(program)
+		if(program != nullptr)
 		{
 			program->end();
 		}
@@ -181,7 +208,7 @@ void model::render(gfx::view_id id, const math::transform& world_transform,
 	const auto& skin_data = mesh->get_skin_bind_data();
 
 	// Has skinning data?
-	if(skin_data.has_bones() && bone_transforms.empty() == false)
+	if(skin_data.has_bones() && !bone_transforms.empty())
 	{
 		// Process each palette in the skin with a matching attribute.
 		const auto& palettes = mesh->get_bone_palettes();
@@ -192,8 +219,7 @@ void model::render(gfx::view_id id, const math::transform& world_transform,
 			// auto max_blend_index = palette.get_maximum_blend_index();
 
 			auto data_group = palette.get_data_group();
-			render_subset(id, true, data_group, reinterpret_cast<float*>(&skinning_matrices[0]),
-						  std::uint32_t(skinning_matrices.size()), apply_cull, depth_write, depth_test,
+			render_subset(id, true, data_group, skinning_matrices, apply_cull, depth_write, depth_test,
 						  extra_states, user_program, setup_params);
 
 		} // Next Palette
@@ -202,8 +228,8 @@ void model::render(gfx::view_id id, const math::transform& world_transform,
 	{
 		for(std::size_t i = 0; i < mesh->get_subset_count(); ++i)
 		{
-			render_subset(id, false, std::uint32_t(i), world_transform, 1, apply_cull, depth_write,
-						  depth_test, extra_states, user_program, setup_params);
+			render_subset(id, false, std::uint32_t(i), {world_transform}, apply_cull, depth_write, depth_test,
+						  extra_states, user_program, setup_params);
 		}
 	}
 }
@@ -211,17 +237,20 @@ void model::render(gfx::view_id id, const math::transform& world_transform,
 void model::recalulate_lod_limits()
 {
 	float upper_limit = 100.0f;
-	_lod_limits.clear();
-	_lod_limits.reserve(_mesh_lods.size());
+	lod_limits_.clear();
+	lod_limits_.reserve(mesh_lods_.size());
 
-	for(size_t i = 0; i < _mesh_lods.size(); ++i)
+	for(size_t i = 0; i < mesh_lods_.size(); ++i)
 	{
 		float lower_limit = 0.0f;
 
-		if(_mesh_lods.size() - 1 != i)
+		if(mesh_lods_.size() - 1 != i)
+		{
 			lower_limit = upper_limit * (0.5f - ((i)*0.1f));
+		}
 
-		_lod_limits.emplace_back(urange(urange::value_type(lower_limit), urange::value_type(upper_limit)));
+		lod_limits_.emplace_back(
+			urange32_t(urange32_t::value_type(lower_limit), urange32_t::value_type(upper_limit)));
 		upper_limit = lower_limit;
 	}
 }

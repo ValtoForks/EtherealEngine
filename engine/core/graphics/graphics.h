@@ -110,7 +110,6 @@ renderer_type get_renderer_type();
 
 /**/
 const caps* get_caps();
-
 /**/
 const hmd* get_hmd();
 
@@ -433,7 +432,7 @@ void set_vertex_buffer(uint8_t _stream, const transient_vertex_buffer* _tvb, uin
 					   uint32_t _numVertices);
 
 /**/
-void set_instance_data_buffer(const instance_data_buffer* _idb, uint32_t _num = UINT32_MAX);
+void set_instance_data_buffer(const instance_data_buffer* _idb, uint32_t _start, uint32_t _num);
 
 /**/
 void set_instance_data_buffer(vertex_buffer_handle _handle, uint32_t _startVertex, uint32_t _num);
@@ -460,7 +459,8 @@ void submit(view_id _id, program_handle _handle, indirect_buffer_handle _indirec
 			uint16_t _num = 1, int32_t _depth = 0, bool _preserveState = false);
 
 /**/
-void set_image(uint8_t _stage, texture_handle _handle, uint8_t _mip, access _access, texture_format _format);
+void set_image(uint8_t _stage, texture_handle _handle, uint8_t _mip, access _access,
+			   texture_format _format = texture_format::Count);
 
 /**/
 void set_buffer(uint8_t _stage, index_buffer_handle _handle, access _access);
@@ -503,9 +503,9 @@ void request_screen_shot(frame_buffer_handle _handle, const char* _filePath);
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
-void set_info_logger(std::function<void(const std::string& log_msg)> logger);
-void set_warning_logger(std::function<void(const std::string& log_msg)> logger);
-void set_error_logger(std::function<void(const std::string& log_msg)> logger);
+void set_info_logger(const std::function<void(const std::string&)>& logger);
+void set_warning_logger(const std::function<void(const std::string&)>& logger);
+void set_error_logger(const std::function<void(const std::string&)>& logger);
 
 void flush();
 
@@ -519,5 +519,7 @@ std::uint64_t screen_quad(float dest_width, float dest_height, float depth = 0.0
 std::uint64_t clip_quad(float depth = 0.0f, float width = 1.0f, float height = 1.0f);
 
 void get_size_from_ratio(backbuffer_ratio _ratio, std::uint16_t& _width, std::uint16_t& _height);
+
 const std::string& get_renderer_filename_extension();
+bool is_supported(uint64_t flag);
 }

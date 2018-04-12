@@ -21,7 +21,7 @@ namespace editor
 {
 constexpr int picking_system::tex_id_dim;
 
-void picking_system::frame_render(std::chrono::duration<float>)
+void picking_system::frame_render(delta_t dt)
 {
 	auto& es = core::get_subsystem<editing_system>();
 	auto& input = core::get_subsystem<runtime::input>();
@@ -59,8 +59,8 @@ void picking_system::frame_render(std::chrono::duration<float>)
 											 pick_at, true))
 			return;
 
-		_reading = 0;
-		_start_readback = true;
+		reading_ = 0;
+		start_readback_ = true;
 
 		camera pick_camera;
 		pick_camera.set_aspect_ratio(1.0f);
@@ -74,11 +74,10 @@ void picking_system::frame_render(std::chrono::duration<float>)
 		const auto& pick_frustum = pick_camera.get_frustum();
 
 		gfx::render_pass pass("picking_buffer_fill");
-		pass.bind(_surface.get());
 		// ID buffer clears to black, which represents clicking on nothing (background)
 		pass.clear(BGFX_CLEAR_COLOR | BGFX_CLEAR_DEPTH, 0x000000ff, 1.0f, 0);
-
 		pass.set_view_proj(pick_view, pick_proj);
+		pass.bind(surface_.get());
 
 		ecs.for_each<transform_component, model_component>(
 			[this, &pass, &pick_frustum](runtime::entity e, transform_component& transform_comp_ref,
@@ -107,37 +106,37 @@ void picking_system::frame_render(std::chrono::duration<float>)
 
 				const auto& bone_transforms = model_comp_ref.get_bone_transforms();
 				model.render(pass.id, world_transform, bone_transforms, true, true, true, 0, 0,
-							 _program.get(), [&color_id](auto& p) { p.set_uniform("u_id", &color_id); });
+							 program_.get(), [&color_id](auto& p) { p.set_uniform("u_id", &color_id); });
 			});
 	}
 
 	// If the user previously clicked, and we're done reading data from GPU, look at ID buffer on CPU
 	// Whatever mesh has the most pixels in the ID buffer is the one the user clicked on.
-	if(!_reading && _start_readback)
+	if((reading_ == 0u) && start_readback_)
 	{
-		const auto caps = gfx::get_caps();
-		bool blit_support = 0 != (caps->supported & BGFX_CAPS_TEXTURE_BLIT);
+		bool blit_support = gfx::is_supported(BGFX_CAPS_TEXTURE_BLIT);
 
 		if(blit_support == false)
 		{
 			APPLOG_WARNING("Texture blitting is not supported. Picking will not work");
-			_start_readback = false;
+			start_readback_ = false;
 			return;
 		}
 
 		gfx::render_pass pass("picking_buffer_blit");
+		pass.touch();
 		// Blit and read
-		gfx::blit(pass.id, _blit_tex->native_handle(), 0, 0, _surface->get_texture()->native_handle());
-		_reading = gfx::read_texture(_blit_tex->native_handle(), _blit_data);
-		_start_readback = false;
+		gfx::blit(pass.id, blit_tex_->native_handle(), 0, 0, surface_->get_texture()->native_handle());
+		reading_ = gfx::read_texture(blit_tex_->native_handle(), blit_data_);
+		start_readback_ = false;
 	}
 
-	if(_reading && _reading <= render_frame)
+	if(reading_ && reading_ <= render_frame)
 	{
-		_reading = 0;
+		reading_ = 0;
 		std::map<std::uint32_t, std::uint32_t> ids; // This contains all the IDs found in the buffer
 		std::uint32_t max_amount = 0;
-		for(std::uint8_t* x = _blit_data; x < _blit_data + tex_id_dim * tex_id_dim * 4;)
+		for(std::uint8_t* x = blit_data_; x < blit_data_ + tex_id_dim * tex_id_dim * 4;)
 		{
 			std::uint8_t rr = *x++;
 			std::uint8_t gg = *x++;
@@ -170,7 +169,7 @@ void picking_system::frame_render(std::chrono::duration<float>)
 		}
 
 		std::uint32_t id_key = 0;
-		if(max_amount)
+		if(max_amount != 0u)
 		{
 			for(auto& pair : ids)
 			{
@@ -180,9 +179,9 @@ void picking_system::frame_render(std::chrono::duration<float>)
 					if(ecs.valid_index(id_key))
 					{
 						auto eid = ecs.create_id(id_key);
-						auto pickedEntity = ecs.get(eid);
-						if(pickedEntity)
-							es.select(pickedEntity);
+						auto picked_entity = ecs.get(eid);
+						if(picked_entity)
+							es.select(picked_entity);
 					}
 					break;
 				}
@@ -209,14 +208,14 @@ picking_system::picking_system()
 		0 | BGFX_TEXTURE_RT | BGFX_TEXTURE_MIN_POINT | BGFX_TEXTURE_MAG_POINT | BGFX_TEXTURE_MIP_POINT |
 			BGFX_TEXTURE_U_CLAMP | BGFX_TEXTURE_V_CLAMP);
 
-	_surface = std::make_shared<gfx::frame_buffer>(
+	surface_ = std::make_shared<gfx::frame_buffer>(
 		std::vector<std::shared_ptr<gfx::texture>>{picking_rt, picking_rt_depth});
 
 	// CPU texture for blitting to and reading ID buffer so we can see what was clicked on.
 	// Impossible to read directly from a render target, you *must* blit to a CPU texture
 	// first. Algorithm Overview: Render on GPU -> Blit to CPU texture -> Read from CPU
 	// texture.
-	_blit_tex = std::make_shared<gfx::texture>(
+	blit_tex_ = std::make_shared<gfx::texture>(
 		tex_id_dim, tex_id_dim, false, 1, gfx::texture_format::RGBA8,
 		0 | BGFX_TEXTURE_BLIT_DST | BGFX_TEXTURE_READ_BACK | BGFX_TEXTURE_MIN_POINT | BGFX_TEXTURE_MAG_POINT |
 			BGFX_TEXTURE_MIP_POINT | BGFX_TEXTURE_U_CLAMP | BGFX_TEXTURE_V_CLAMP);
@@ -224,12 +223,13 @@ picking_system::picking_system()
 	auto& ts = core::get_subsystem<core::task_system>();
 	auto& am = core::get_subsystem<runtime::asset_manager>();
 
-	auto vs_picking_id = am.load<gfx::shader>("editor_data:/shaders/vs_picking_id.sc");
-	auto fs_picking_id = am.load<gfx::shader>("editor_data:/shaders/fs_picking_id.sc");
-
+	auto vs_picking_id = am.load<gfx::shader>("editor:/data/shaders/vs_picking_id.sc");
+	vs_picking_id.wait();
+	auto fs_picking_id = am.load<gfx::shader>("editor:/data/shaders/fs_picking_id.sc");
+	fs_picking_id.wait();
 	ts.push_or_execute_on_owner_thread(
 		[this](asset_handle<gfx::shader> vs, asset_handle<gfx::shader> fs) {
-			_program = std::make_unique<gpu_program>(vs, fs);
+			program_ = std::make_unique<gpu_program>(vs, fs);
 
 		},
 		vs_picking_id, fs_picking_id);

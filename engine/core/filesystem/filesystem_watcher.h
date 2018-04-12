@@ -36,7 +36,7 @@ public:
 		fs::path last_path;
 		entry_status status = unmodified;
 		fs::file_time_type last_mod_time;
-		uintmax_t size = 0;
+		std::uintmax_t size = 0;
 		fs::file_type type;
 	};
 
@@ -129,16 +129,16 @@ protected:
 	static void unwatch_all_impl();
 
 	/// Mutex for the file watchers
-	std::mutex _mutex;
+	std::mutex mutex_;
 	/// Atomic bool sync
-	std::atomic<bool> _watching = {false};
+	std::atomic<bool> watching_ = {false};
 
-	std::condition_variable _cv;
+	std::condition_variable cv_;
 	/// Thread that polls for changes
-	std::thread _thread;
+	std::thread thread_;
 	/// Registered file watchers
-	class watcher_impl;
-	std::map<std::uint64_t, std::shared_ptr<watcher_impl>> _watchers;
+	class impl;
+	std::map<std::uint64_t, std::shared_ptr<impl>> watchers_;
 };
 }
 

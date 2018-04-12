@@ -19,29 +19,29 @@ public:
 
 	using clock_t = std::chrono::high_resolution_clock;
 	cache() = default;
-	
+
 	cache(const fs::path& p, clock_t::duration scan_frequency)
-        : _path(p)
-		, _scan_frequency(scan_frequency)
-		, _should_refresh(true)
+		: path_(p)
+		, scan_frequency_(scan_frequency)
+		, should_refresh_(true)
 	{
 		watch();
 	}
 
 	cache(const cache& rhs)
-		: _path(rhs.path)
-		, _scan_frequency(rhs._scan_frequency)
-		, _entries(rhs._entries)
-		, _should_refresh(rhs._should_refresh.load())
+		: path_(rhs.path)
+		, scan_frequency_(rhs.scan_frequency_)
+		, entries_(rhs.entries_)
+		, should_refresh_(rhs.should_refresh_.load())
 	{
 		watch();
 	}
 
 	cache(cache&& rhs)
-		: _path(std::move(rhs._path))
-		, _scan_frequency(std::move(rhs._scan_frequency))
-		, _entries(std::move(rhs._entries))
-		, _should_refresh(rhs._should_refresh.load())
+		: path_(std::move(rhs.path_))
+		, scan_frequency_(std::move(rhs.scan_frequency_))
+		, entries_(std::move(rhs.entries_))
+		, should_refresh_(rhs.should_refresh_.load())
 	{
 		watch();
 	}
@@ -49,10 +49,10 @@ public:
 	cache& operator=(const cache& rhs)
 	{
 		unwatch();
-		_path = rhs._path;
-		_scan_frequency = rhs._scan_frequency;
-		_entries = rhs._entries;
-		_should_refresh = rhs._should_refresh.load();
+		path_ = rhs.path_;
+		scan_frequency_ = rhs.scan_frequency_;
+		entries_ = rhs.entries_;
+		should_refresh_ = rhs.should_refresh_.load();
 		watch();
 
 		return *this;
@@ -61,10 +61,10 @@ public:
 	cache& operator=(cache&& rhs)
 	{
 		unwatch();
-		_path = std::move(rhs._path);
-		_scan_frequency = std::move(rhs._scan_frequency);
-		_entries = std::move(rhs._entries);
-		_should_refresh = rhs._should_refresh.load();
+		path_ = std::move(rhs.path_);
+		scan_frequency_ = std::move(rhs.scan_frequency_);
+		entries_ = std::move(rhs.entries_);
+		should_refresh_ = rhs.should_refresh_.load();
 		watch();
 
 		return *this;
@@ -87,7 +87,7 @@ public:
 		{
 			refresh();
 		}
-		return _entries.begin();
+		return entries_.begin();
 	}
 
 	//-----------------------------------------------------------------------------
@@ -98,7 +98,7 @@ public:
 	//-----------------------------------------------------------------------------
 	decltype(auto) end() const
 	{
-		return _entries.end();
+		return entries_.end();
 	}
 
 	//-----------------------------------------------------------------------------
@@ -112,52 +112,51 @@ public:
 	//-----------------------------------------------------------------------------
 	void refresh() const
 	{
-		_entries.clear();
+		entries_.clear();
 
 		fs::error_code err;
-		iterator_t it(_path, err);
+		iterator_t it(path_, err);
 		for(const auto& p : it)
 		{
-			_entries.push_back(p);
+			entries_.push_back(p);
 		}
-        
-        std::sort(std::begin(_entries), std::end(_entries), [](const auto& lhs, const auto& rhs)
-        {
-            return fs::is_directory(lhs.status()) > fs::is_directory(rhs.status());
-        });
-        
-		_should_refresh = false;
+
+		std::sort(std::begin(entries_), std::end(entries_), [](const auto& lhs, const auto& rhs) {
+			return fs::is_directory(lhs.status()) > fs::is_directory(rhs.status());
+		});
+
+		should_refresh_ = false;
 	}
 
-    const fs::path& get_path() const
-    {
-        return _path;
-    }
-    
-    void set_path(const fs::path& path)
-    {
-        if(_path == path)
-        {
-            return;
-        }
-        unwatch();
-        _path = path;
-        _should_refresh = true;
-        watch();
-    }
-    
-    void set_scan_frequency(clock_t::duration scan_frequency)
-    {
-        if(_scan_frequency == scan_frequency)
-        {
-            return;
-        }
-        unwatch();
-        _scan_frequency = scan_frequency;
-        _should_refresh = true;
-        watch();
-    }
-    
+	const fs::path& get_path() const
+	{
+		return path_;
+	}
+
+	void set_path(const fs::path& path)
+	{
+		if(path_ == path)
+		{
+			return;
+		}
+		unwatch();
+		path_ = path;
+		should_refresh_ = true;
+		watch();
+	}
+
+	void set_scan_frequency(clock_t::duration scan_frequency)
+	{
+		if(scan_frequency_ == scan_frequency)
+		{
+			return;
+		}
+		unwatch();
+		scan_frequency_ = scan_frequency;
+		should_refresh_ = true;
+		watch();
+	}
+
 private:
 	//-----------------------------------------------------------------------------
 	//  Name : should_refresh ()
@@ -167,7 +166,7 @@ private:
 	//-----------------------------------------------------------------------------
 	bool should_refresh() const
 	{
-		return _should_refresh;
+		return should_refresh_;
 	}
 
 	void watch()
@@ -175,24 +174,24 @@ private:
 		using namespace std::literals;
 		constexpr bool is_recursive = std::is_same<iterator_t, recursive_directory_iterator>::value;
 
-		_watch_id = watcher::watch(_path / "*", is_recursive, false, _scan_frequency,
-								   [this](const auto&, bool) { _should_refresh = true; });
+		watch_id_ = watcher::watch(path_ / "*", is_recursive, false, scan_frequency_,
+								   [this](const auto&, bool) { should_refresh_ = true; });
 	}
 	void unwatch()
 	{
-		watcher::unwatch(_watch_id);
+		watcher::unwatch(watch_id_);
 	}
 
 	///
-	fs::path _path;
+	fs::path path_;
 
-	clock_t::duration _scan_frequency = std::chrono::milliseconds(500);
+	clock_t::duration scan_frequency_ = std::chrono::milliseconds(500);
 	///
-	mutable std::vector<directory_entry> _entries;
+	mutable std::vector<directory_entry> entries_;
 	///
-	mutable std::atomic_bool _should_refresh = {true};
+	mutable std::atomic_bool should_refresh_ = {true};
 	///
-	std::uint64_t _watch_id = 0;
+	std::uint64_t watch_id_ = 0;
 };
 
 using directory_cache = cache<directory_iterator>;

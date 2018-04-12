@@ -1,12 +1,11 @@
 #pragma once
-#include "core/filesystem/filesystem.h"
+#include "core/filesystem/filesystem_syncer.h"
 #include "core/math/math_includes.h"
 #include <deque>
 #include <mutex>
 
 namespace editor
 {
-
 class project_manager
 {
 public:
@@ -26,7 +25,7 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	void open_project(const fs::path& project_path);
+	bool open_project(const fs::path& project_path);
 
 	//-----------------------------------------------------------------------------
 	//  Name : close_project ()
@@ -69,16 +68,16 @@ public:
 	void load_config();
 
 	//-----------------------------------------------------------------------------
-	//  Name : get_current_project ()
+	//  Name : get_name ()
 	/// <summary>
 	///
 	///
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	inline const std::string& get_current_project() const
+	inline const std::string& get_name() const
 	{
-		return _project_name;
+		return project_name_;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -89,9 +88,9 @@ public:
 	///
 	/// </summary>
 	//-----------------------------------------------------------------------------
-	inline void set_current_project(const std::string& name)
+	inline void set_name(const std::string& name)
 	{
-		_project_name = name;
+		project_name_ = name;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -104,16 +103,29 @@ public:
 	//-----------------------------------------------------------------------------
 	inline options& get_options()
 	{
-		return _options;
+		return options_;
 	}
 
-
 private:
+	void setup_directory(fs::syncer& syncer);
+	void setup_meta_syncer(fs::syncer& syncer, const fs::path& data_dir, const fs::path& meta_dir);
+	void setup_cache_syncer(std::vector<uint64_t>& watchers, fs::syncer& syncer, const fs::path& meta_dir,
+							const fs::path& cache_dir);
 	/// Project options
-	options _options;
+	options options_;
 	/// Current project name
-	std::string _project_name;
-	///
-	std::vector<std::uint64_t> _watch_ids;
+	std::string project_name_;
+
+	fs::syncer app_meta_syncer_;
+	fs::syncer app_cache_syncer_;
+	std::vector<std::uint64_t> app_watchers_;
+
+	fs::syncer editor_meta_syncer_;
+	fs::syncer editor_cache_syncer_;
+	std::vector<std::uint64_t> editor_watchers_;
+
+	fs::syncer engine_meta_syncer_;
+	fs::syncer engine_cache_syncer_;
+	std::vector<std::uint64_t> engine_watchers_;
 };
 }

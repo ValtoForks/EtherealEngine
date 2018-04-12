@@ -2,6 +2,7 @@
 
 #include "../assets/asset_handle.h"
 #include "core/graphics/program.h"
+#include "core/math/math_includes.h"
 #include "core/reflection/registration.h"
 #include "core/serialization/serialization.h"
 
@@ -75,6 +76,9 @@ public:
 	/// </summary>
 	//-----------------------------------------------------------------------------
 	void set_uniform(const std::string& _name, const void* _value, std::uint16_t _num = 1);
+	void set_uniform(const std::string& _name, const math::vec4& _value, std::uint16_t _num = 1);
+	void set_uniform(const std::string& _name, const math::vec3& _value, std::uint16_t _num = 1);
+	void set_uniform(const std::string& _name, const math::vec2& _value, std::uint16_t _num = 1);
 
 	//-----------------------------------------------------------------------------
 	//  Name : get_uniform ()
@@ -107,9 +111,9 @@ private:
 	void attach_shader(asset_handle<gfx::shader> shader);
 
 	/// Shaders that created this program.
-	std::vector<asset_handle<gfx::shader>> _shaders;
+	std::vector<asset_handle<gfx::shader>> shaders_;
 	/// Shaders that created this program.
-	std::vector<std::uint16_t> _shaders_cached;
+	std::vector<std::uint16_t> shaders_cached_;
 	/// program
-	std::unique_ptr<gfx::program> _program;
+	std::unique_ptr<gfx::program> program_;
 };
