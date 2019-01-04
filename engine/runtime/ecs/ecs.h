@@ -1,10 +1,12 @@
+#include <memory>
+
 #pragma once
 
-#include "core/common/assert.hpp"
-#include "core/common/nonstd/type_index.hpp"
-#include "core/reflection/registration.h"
-#include "core/serialization/serialization.h"
-#include "core/signals/event.hpp"
+#include <core/common/assert.hpp>
+#include <core/common/nonstd/type_index.hpp>
+#include <core/reflection/registration.h>
+#include <core/serialization/serialization.h>
+#include <core/signals/event.hpp>
 
 #include <algorithm>
 #include <bitset>
@@ -99,9 +101,9 @@ public:
 	struct id_t
 	{
 		id_t()
-			: id_(0)
-		{
-		}
+            : id_(0)
+        {}
+        
 		explicit id_t(std::uint64_t id)
 			: id_(id)
 		{
@@ -139,7 +141,7 @@ public:
 		}
 
 	private:
-		std::uint64_t id_;
+		std::uint64_t id_ = 0;
 	};
 
 	/**
@@ -310,7 +312,7 @@ public:
 	//-----------------------------------------------------------------------------
 	bool is_touched() const
 	{
-		return last_touched_ >= static_cast<std::uint32_t>(ecs::get_frame());
+		return last_touched_ == static_cast<std::uint32_t>(ecs::get_frame()) - 1;
 	}
 
 	//-----------------------------------------------------------------------------
@@ -358,7 +360,7 @@ template <typename T>
 class component_impl : public component
 {
 private:
-	virtual rtti::type_index_sequential_t::index_t runtime_id() const
+	rtti::type_index_sequential_t::index_t runtime_id() const override
 	{
 		return static_id();
 	}
@@ -391,7 +393,7 @@ static const std::size_t MAX_COMPONENTS = 128;
 class entity_component_system
 {
 public:
-	typedef std::bitset<MAX_COMPONENTS> component_mask_t;
+	using component_mask_t = std::bitset<MAX_COMPONENTS>;
 
 	explicit entity_component_system() = default;
 	virtual ~entity_component_system();
@@ -549,7 +551,7 @@ public:
 		template <typename T>
 		struct identity
 		{
-			typedef T type;
+			using type = T;
 		};
 
 		void for_each(typename identity<std::function<void(entity entity, Components&...)>>::type f)
@@ -805,7 +807,7 @@ public:
 	template <typename T>
 	struct identity
 	{
-		typedef T type;
+		using type = T;
 	};
 
 	template <typename... Components>
@@ -961,7 +963,7 @@ private:
 		auto& pool = component_pools_[family];
 		if(!pool)
 		{
-			pool.reset(new component_storage());
+			pool = std::make_unique<component_storage>();
 			pool->expand(index_counter_);
 		}
 

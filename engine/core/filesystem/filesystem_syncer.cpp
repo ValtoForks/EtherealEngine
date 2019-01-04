@@ -8,12 +8,10 @@ static void ensure_directory_exists(const fs::path& path)
 	fs::error_code err;
 	if(path.has_extension())
 	{
-		fs::error_code err;
 		fs::create_directories(fs::path(path).parent_path(), err);
 	}
 	else
 	{
-		fs::error_code err;
 		fs::create_directories(path, err);
 	}
 }
@@ -105,7 +103,7 @@ void syncer::sync(const fs::path& reference_dir, const fs::path& synced_dir)
 	const auto on_change = [this](const auto& entries, bool is_initial_listing) {
 		for(const auto& entry : entries)
 		{
-			bool is_directory = (entry.type == fs::directory_file);
+			bool is_directory = (entry.type == fs::file_type::directory);
 			auto entry_path = entry.path;
 			std::string entry_extension;
 			while(entry_path.has_extension())

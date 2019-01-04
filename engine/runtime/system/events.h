@@ -1,10 +1,12 @@
 #pragma once
 
-#include "core/common/basetypes.hpp"
-#include "core/signals/event.hpp"
+#include <core/common/basetypes.hpp>
+#include <core/signals/event.hpp>
+
+#include <mml/window/event.hpp>
+
 #include <chrono>
 #include <cstdint>
-#include <mml/window/event.hpp>
 
 namespace runtime
 {
@@ -12,6 +14,7 @@ namespace runtime
 extern event<void(delta_t)> on_frame_begin;
 extern event<void(delta_t)> on_frame_update;
 extern event<void(delta_t)> on_frame_render;
+extern event<void(delta_t)> on_frame_ui_render;
 extern event<void(delta_t)> on_frame_end;
 
 /// platform events

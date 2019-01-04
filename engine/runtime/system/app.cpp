@@ -1,4 +1,7 @@
 #include "app.h"
+#include "app_setup.h"
+#include "events.h"
+
 #include "../assets/asset_manager.h"
 #include "../ecs/ecs.h"
 #include "../ecs/systems/audio_system.h"
@@ -10,13 +13,13 @@
 #include "../input/input.h"
 #include "../rendering/render_window.h"
 #include "../rendering/renderer.h"
-#include "app_setup.h"
-#include "core/audio/library.h"
-#include "core/logging/logging.h"
-#include "core/serialization/serialization.h"
-#include "core/simulation/simulation.h"
-#include "core/tasks/task_system.h"
-#include "events.h"
+
+#include <core/audio/library.h>
+#include <core/logging/logging.h>
+#include <core/serialization/serialization.h>
+#include <core/simulation/simulation.h>
+#include <core/tasks/task_system.h>
+
 #include <sstream>
 
 namespace runtime
@@ -26,7 +29,7 @@ void app::setup(cmd_line::parser& parser)
 {
 	auto logging_container = logging::get_mutable_logging_container();
 	logging_container->add_sink(std::make_shared<logging::sinks::platform_sink_mt>());
-	logging_container->add_sink(std::make_shared<logging::sinks::daily_file_sink_mt>("Log", 23, 59));
+	logging_container->add_sink(std::make_shared<logging::sinks::simple_file_sink_mt>("Log.txt", true));
 
 	logging::create(APPLOG, logging_container);
 
@@ -82,7 +85,7 @@ void poll_events()
 		mml::platform_event e;
 		while(window->poll_event(e))
 		{
-			events.emplace_back(std::move(e));
+			events.emplace_back(e);
 		}
 
 		if(window->has_focus())
@@ -136,6 +139,8 @@ void app::run_one_frame()
 	on_frame_update(dt);
 
 	on_frame_render(dt);
+
+	on_frame_ui_render(dt);
 
 	on_frame_end(dt);
 }
@@ -202,4 +207,4 @@ void app::quit(int exitcode)
 	running_ = false;
 	exitcode_ = exitcode;
 }
-}
+} // namespace runtime

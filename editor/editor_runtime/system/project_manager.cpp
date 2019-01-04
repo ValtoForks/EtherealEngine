@@ -3,15 +3,18 @@
 #include "../assets/asset_extensions.h"
 #include "../editing/editing_system.h"
 #include "../meta/system/project_manager.hpp"
-#include "core/filesystem/filesystem_watcher.h"
-#include "core/graphics/graphics.h"
-#include "core/logging/logging.h"
-#include "core/serialization/associative_archive.h"
-#include "core/system/subsystem.h"
-#include "core/tasks/task_system.h"
-#include "runtime/assets/asset_manager.h"
-#include "runtime/ecs/ecs.h"
-#include "runtime/system/events.h"
+
+#include <core/filesystem/filesystem_watcher.h>
+#include <core/graphics/graphics.h>
+#include <core/logging/logging.h>
+#include <core/serialization/associative_archive.h>
+#include <core/system/subsystem.h>
+#include <core/tasks/task_system.h>
+
+#include <runtime/assets/asset_manager.h>
+#include <runtime/ecs/ecs.h>
+#include <runtime/system/events.h>
+
 #include <fstream>
 
 namespace editor
@@ -47,14 +50,14 @@ static std::uint64_t watch_assets(const fs::path& dir, const std::string& wildca
 	fs::path watch_dir = (dir / wildcard).make_preferred();
 
 	return fs::watcher::watch(
-		watch_dir, true, true, 500ms, [&am, &ts, reload_async](const auto& entries, bool is_initial_list) {
+		watch_dir, true, true, 500ms, [&am, &ts](const auto& entries, bool is_initial_list) {
 			for(const auto& entry : entries)
 			{
 				auto p = fs::reduce_trailing_extensions(entry.path);
 				auto data_key = fs::convert_to_protocol(p);
-				auto key = fs::replace(data_key.generic(), ":/cache", ":/data").string();
+				auto key = fs::replace(data_key.generic_string(), ":/cache", ":/data").generic_string();
 
-				if(entry.type == fs::file_type::regular_file)
+				if(entry.type == fs::file_type::regular)
 				{
 					if(entry.status == fs::watcher::entry_status::removed)
 					{
@@ -64,7 +67,8 @@ static std::uint64_t watch_assets(const fs::path& dir, const std::string& wildca
 					{
 						auto old_p = fs::reduce_trailing_extensions(entry.last_path);
 						auto old_data_key = fs::convert_to_protocol(old_p);
-						auto old_key = fs::replace(old_data_key.generic(), ":/cache", ":/data").string();
+						auto old_key =
+							fs::replace(old_data_key.generic_string(), ":/cache", ":/data").generic_string();
 						auto task = ts.push_on_owner_thread(
 							[old_key, key, &am]() { am.rename_asset<T>(old_key, key); });
 					}
@@ -78,21 +82,18 @@ static std::uint64_t watch_assets(const fs::path& dir, const std::string& wildca
 					}
 				}
 			}
-
 		});
 }
 
 template <typename T>
 static void add_to_syncer(std::vector<uint64_t>& watchers, fs::syncer& syncer, const fs::path& dir,
-						  fs::syncer::on_entry_removed_t on_removed,
-						  fs::syncer::on_entry_renamed_t on_renamed)
+						  const fs::syncer::on_entry_removed_t& on_removed,
+						  const fs::syncer::on_entry_renamed_t& on_renamed)
 {
 	auto& ts = core::get_subsystem<core::task_system>();
 	auto on_modified = [&ts](const auto& ref_path, const auto& synced_paths, bool is_initial_listing) {
-
 		auto task = ts.push_on_worker_thread(
-			[ ref_path, synced_paths = remove_meta_tag(synced_paths), is_initial_listing ]() {
-
+			[ref_path, synced_paths = remove_meta_tag(synced_paths), is_initial_listing]() {
 				fs::path output = synced_paths.front();
 				fs::error_code err;
 				if(is_initial_listing && fs::exists(output, err))
@@ -101,7 +102,6 @@ static void add_to_syncer(std::vector<uint64_t>& watchers, fs::syncer& syncer, c
 				}
 				asset_compiler::compile<T>(ref_path, output);
 			});
-
 	};
 
 	for(const auto& type : ex::get_suported_formats<T>())
@@ -114,14 +114,14 @@ static void add_to_syncer(std::vector<uint64_t>& watchers, fs::syncer& syncer, c
 
 template <>
 void add_to_syncer<gfx::shader>(std::vector<uint64_t>& watchers, fs::syncer& syncer, const fs::path& dir,
-								fs::syncer::on_entry_removed_t on_removed,
-								fs::syncer::on_entry_renamed_t on_renamed)
+								const fs::syncer::on_entry_removed_t& on_removed,
+								const fs::syncer::on_entry_renamed_t& on_renamed)
 {
 	auto& ts = core::get_subsystem<core::task_system>();
 
 	auto on_modified = [&ts](const auto& ref_path, const auto& synced_paths, bool is_initial_listing) {
 		auto task = ts.push_on_worker_thread(
-			[ ref_path, synced_paths = remove_meta_tag(synced_paths), is_initial_listing ]() {
+			[ref_path, synced_paths = remove_meta_tag(synced_paths), is_initial_listing]() {
 				const auto& renderer_extension = gfx::get_renderer_filename_extension();
 				auto it = std::find_if(std::begin(synced_paths), std::end(synced_paths),
 									   [&renderer_extension](const auto& key) {
@@ -143,7 +143,6 @@ void add_to_syncer<gfx::shader>(std::vector<uint64_t>& watchers, fs::syncer& syn
 
 				asset_compiler::compile<gfx::shader>(ref_path, output);
 			});
-
 	};
 
 	for(const auto& type : ex::get_suported_formats<gfx::shader>())
@@ -288,7 +287,6 @@ void project_manager::setup_meta_syncer(fs::syncer& syncer, const fs::path& data
 
 	const auto on_file_modified = [](const auto& /*ref_path*/, const auto& synced_paths,
 									 bool is_initial_listing) {
-
 		for(const auto& synced_path : synced_paths)
 		{
 			fs::error_code err;
@@ -321,18 +319,15 @@ void project_manager::setup_cache_syncer(std::vector<uint64_t>& watchers, fs::sy
 	setup_directory(syncer);
 
 	auto on_removed = [](const auto& /*ref_path*/, const auto& synced_paths) {
-
 		for(const auto& synced_path : synced_paths)
 		{
 			auto synced_asset = fs::replace(synced_path, ".meta", "");
 			fs::error_code err;
 			fs::remove_all(synced_asset, err);
 		}
-
 	};
 
 	auto on_renamed = [](const auto& /*ref_path*/, const auto& synced_paths) {
-
 		for(const auto& synced_path : synced_paths)
 		{
 			auto synced_old_asset = fs::replace(synced_path.first, ".meta", "");
@@ -340,7 +335,6 @@ void project_manager::setup_cache_syncer(std::vector<uint64_t>& watchers, fs::sy
 			fs::error_code err;
 			fs::rename(synced_old_asset, synced_new_asset, err);
 		}
-
 	};
 
 	add_to_syncer<gfx::texture>(watchers, syncer, cache_dir, on_removed, on_renamed);
@@ -406,4 +400,4 @@ project_manager::~project_manager()
 	engine_meta_syncer_.unsync();
 	engine_cache_syncer_.unsync();
 }
-}
+} // namespace editor

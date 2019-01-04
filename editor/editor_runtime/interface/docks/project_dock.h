@@ -1,6 +1,7 @@
 #pragma once
-#include "core/filesystem/filesystem_cache.hpp"
 #include "imguidock.h"
+
+#include <core/filesystem/filesystem_cache.hpp>
 
 class project_dock : public imguidock::dock
 {
@@ -9,6 +10,7 @@ public:
 	void render(const ImVec2& area);
 
 private:
+
 	void context_menu();
 	void context_create_menu();
 	void set_cache_path(const fs::path& path);

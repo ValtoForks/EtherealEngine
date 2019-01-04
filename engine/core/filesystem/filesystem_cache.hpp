@@ -17,7 +17,8 @@ public:
 					  std::is_same<iterator_t, directory_iterator>::value,
 				  "T must be a valid directory iterator type");
 
-	using clock_t = std::chrono::high_resolution_clock;
+	using clock_t = std::chrono::steady_clock;
+
 	cache() = default;
 
 	cache(const fs::path& p, clock_t::duration scan_frequency)
@@ -37,7 +38,7 @@ public:
 		watch();
 	}
 
-	cache(cache&& rhs)
+	cache(cache&& rhs) noexcept
 		: path_(std::move(rhs.path_))
 		, scan_frequency_(std::move(rhs.scan_frequency_))
 		, entries_(std::move(rhs.entries_))
@@ -58,7 +59,7 @@ public:
 		return *this;
 	}
 
-	cache& operator=(cache&& rhs)
+	cache& operator=(cache&& rhs) noexcept
 	{
 		unwatch();
 		path_ = std::move(rhs.path_);
@@ -101,6 +102,36 @@ public:
 		return entries_.end();
 	}
 
+    //-----------------------------------------------------------------------------
+	//  Name : size ()
+	/// <summary>
+	/// Returns the size for the underlying cached container.
+	/// </summary>
+	//-----------------------------------------------------------------------------
+	decltype(auto) size() const
+	{
+		if(should_refresh())
+		{
+			refresh();
+		}
+		return entries_.size();
+	}
+
+    //-----------------------------------------------------------------------------
+	//  Name : at ()
+	/// <summary>
+	/// Directly index into the underlying cached container.
+	/// </summary>
+	//-----------------------------------------------------------------------------
+	decltype(auto) at(size_t idx) const
+	{
+		return entries_.at(idx);
+	}
+    decltype(auto) operator[](size_t idx) const
+    {
+        return entries_[idx];
+    }
+
 	//-----------------------------------------------------------------------------
 	//  Name : refresh ()
 	/// <summary>
@@ -118,11 +149,25 @@ public:
 		iterator_t it(path_, err);
 		for(const auto& p : it)
 		{
-			entries_.push_back(p);
+			entries_.emplace_back();
+			auto& cache_entry = entries_.back();
+			cache_entry.entry = p;
+			const auto& absolute_path = cache_entry.entry.path();
+            auto filename = absolute_path.filename();
+			cache_entry.protocol_path = fs::convert_to_protocol(absolute_path).generic_string();
+            cache_entry.filename = absolute_path.filename().string();
+			cache_entry.extension = filename.extension().string();
+			cache_entry.stem = filename.string();
+
+			while(filename.has_extension())
+			{
+				filename = filename.stem();
+				cache_entry.stem = filename.string();
+			}
 		}
 
 		std::sort(std::begin(entries_), std::end(entries_), [](const auto& lhs, const auto& rhs) {
-			return fs::is_directory(lhs.status()) > fs::is_directory(rhs.status());
+			return fs::is_directory(lhs.entry.status()) > fs::is_directory(rhs.entry.status());
 		});
 
 		should_refresh_ = false;
@@ -157,6 +202,16 @@ public:
 		watch();
 	}
 
+
+	struct cache_entry
+	{
+		directory_entry entry;
+        std::string filename;
+        std::string stem;
+        std::string extension;
+        std::string protocol_path;
+	};
+
 private:
 	//-----------------------------------------------------------------------------
 	//  Name : should_refresh ()
@@ -187,7 +242,7 @@ private:
 
 	clock_t::duration scan_frequency_ = std::chrono::milliseconds(500);
 	///
-	mutable std::vector<directory_entry> entries_;
+	mutable std::vector<cache_entry> entries_;
 	///
 	mutable std::atomic_bool should_refresh_ = {true};
 	///
@@ -213,4 +268,4 @@ using recursive_directory_cache = cache<recursive_directory_iterator>;
 /// 	{
 /// 	}
 /// }
-}
+} // namespace fs

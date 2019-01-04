@@ -1,9 +1,9 @@
 #pragma once
 
-#include "bgfx/bgfx.h"
-#include "bgfx/embedded_shader.h"
-#include "bgfx/platform.h"
-#include "bx/string.h"
+#include <bgfx/bgfx.h>
+#include <bgfx/embedded_shader.h>
+#include <bgfx/platform.h>
+#include <bx/string.h>
 #include "format.h"
 #include "vertex_decl.h"
 #include <cstdint>
@@ -13,6 +13,7 @@
 namespace gfx
 {
 static const uint16_t invalid_handle = bgfx::kInvalidHandle;
+using init_type = bgfx::Init;
 using view_id = bgfx::ViewId;
 using renderer_type = bgfx::RendererType::Enum;
 using backbuffer_ratio = bgfx::BackbufferRatio::Enum;
@@ -23,13 +24,13 @@ using uniform_info = bgfx::UniformInfo;
 using attachment = bgfx::Attachment;
 using platform_data = bgfx::PlatformData;
 using caps = bgfx::Caps;
-using hmd = bgfx::HMD;
 using stats = bgfx::Stats;
 using access = bgfx::Access::Enum;
 using view_mode = bgfx::ViewMode::Enum;
 using occlusion_query_result = bgfx::OcclusionQueryResult::Enum;
 using topology_conversion = bgfx::TopologyConvert::Enum;
 using topology_sort = bgfx::TopologySort::Enum;
+using topology = bgfx::Topology;
 using release_fn = bgfx::ReleaseFn;
 using encoder = bgfx::Encoder;
 
@@ -54,8 +55,7 @@ using instance_data_buffer = bgfx::InstanceDataBuffer;
 void set_platform_data(const platform_data& _data);
 
 /**/
-bool init(renderer_type _type = renderer_type::Count, uint16_t _vendorId = BGFX_PCI_ID_NONE,
-		  uint16_t _deviceId = 0);
+bool init(init_type init_data);
 
 /**/
 void shutdown();
@@ -110,8 +110,6 @@ renderer_type get_renderer_type();
 
 /**/
 const caps* get_caps();
-/**/
-const hmd* get_hmd();
 
 /**/
 const stats* get_stats();
@@ -166,7 +164,7 @@ dynamic_index_buffer_handle create_dynamic_index_buffer(const memory_view* _mem,
 														uint16_t _flags = BGFX_BUFFER_NONE);
 
 /**/
-void update_dynamic_index_buffer(dynamic_index_buffer_handle _handle, uint32_t _startIndex,
+void update(dynamic_index_buffer_handle _handle, uint32_t _startIndex,
 								 const memory_view* _mem);
 
 /**/
@@ -181,7 +179,7 @@ dynamic_vertex_buffer_handle create_dynamic_vertex_buffer(const memory_view* _me
 														  uint16_t _flags = BGFX_BUFFER_NONE);
 
 /**/
-void update_dynamic_vertex_buffer(dynamic_vertex_buffer_handle _handle, uint32_t _startVertex,
+void update(dynamic_vertex_buffer_handle _handle, uint32_t _startVertex,
 								  const memory_view* _mem);
 
 /**/
@@ -241,33 +239,33 @@ void destroy(program_handle _handle);
 
 /**/
 bool is_texture_valid(uint16_t _depth, bool _cubeMap, uint16_t _numLayers, texture_format _format,
-					  uint32_t _flags);
+					  uint64_t _flags);
 
 /**/
 void calc_texture_size(texture_info& _info, uint16_t _width, uint16_t _height, uint16_t _depth, bool _cubeMap,
 					   bool _hasMips, uint16_t _numLayers, texture_format _format);
 
 /**/
-texture_handle create_texture(const memory_view* _mem, uint32_t _flags = BGFX_TEXTURE_NONE, uint8_t _skip = 0,
+texture_handle create_texture(const memory_view* _mem, uint64_t _flags = BGFX_TEXTURE_NONE|BGFX_SAMPLER_NONE, uint8_t _skip = 0,
 							  texture_info* _info = nullptr);
 
 /**/
 texture_handle create_texture_2d(uint16_t _width, uint16_t _height, bool _hasMips, uint16_t _numLayers,
-								 texture_format _format, uint32_t _flags = BGFX_TEXTURE_NONE,
+								 texture_format _format, uint64_t _flags = BGFX_TEXTURE_NONE|BGFX_SAMPLER_NONE,
 								 const memory_view* _mem = nullptr);
 
 /**/
 texture_handle create_texture_2d(backbuffer_ratio _ratio, bool _hasMips, uint16_t _numLayers,
-								 texture_format _format, uint32_t _flags = BGFX_TEXTURE_NONE);
+								 texture_format _format, uint64_t _flags = BGFX_TEXTURE_NONE|BGFX_SAMPLER_NONE);
 
 /**/
 texture_handle create_texture_3d(uint16_t _width, uint16_t _height, uint16_t _depth, bool _hasMips,
-								 texture_format _format, uint32_t _flags = BGFX_TEXTURE_NONE,
+								 texture_format _format, uint64_t _flags = BGFX_TEXTURE_NONE|BGFX_SAMPLER_NONE,
 								 const memory_view* _mem = nullptr);
 
 /**/
 texture_handle create_texture_cube(uint16_t _size, bool _hasMips, uint16_t _numLayers, texture_format _format,
-								   uint32_t _flags = BGFX_TEXTURE_NONE, const memory_view* _mem = nullptr);
+								   uint64_t _flags = BGFX_TEXTURE_NONE|BGFX_SAMPLER_NONE, const memory_view* _mem = nullptr);
 
 /**/
 void update_texture_2d(texture_handle _handle, uint16_t _layer, uint8_t _mip, uint16_t _x, uint16_t _y,
@@ -294,11 +292,11 @@ void destroy(texture_handle _handle);
 
 /**/
 frame_buffer_handle create_frame_buffer(uint16_t _width, uint16_t _height, texture_format _format,
-										uint32_t _textureFlags = BGFX_TEXTURE_U_CLAMP | BGFX_TEXTURE_V_CLAMP);
+										uint64_t _textureFlags = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 
 /**/
 frame_buffer_handle create_frame_buffer(backbuffer_ratio _ratio, texture_format _format,
-										uint32_t _textureFlags = BGFX_TEXTURE_U_CLAMP | BGFX_TEXTURE_V_CLAMP);
+										uint64_t _textureFlags = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP);
 
 /**/
 frame_buffer_handle create_frame_buffer(uint8_t _num, const texture_handle* _handles,
@@ -310,7 +308,8 @@ frame_buffer_handle create_frame_buffer(uint8_t _num, const attachment* _attachm
 
 /**/
 frame_buffer_handle create_frame_buffer(void* _nwh, uint16_t _width, uint16_t _height,
-										texture_format _depthFormat = texture_format::UnknownDepth);
+                                        texture_format _format = texture_format::Count,
+										texture_format _depthFormat = texture_format::Count);
 
 /**/
 texture_handle get_texture(frame_buffer_handle _handle, uint8_t _attachment = 0);
@@ -369,10 +368,6 @@ void set_view_frame_buffer(view_id _id, frame_buffer_handle _handle);
 
 /**/
 void set_view_transform(view_id _id, const void* _view, const void* _proj);
-
-/**/
-void set_view_transform_stereo(view_id _id, const void* _view, const void* _projL,
-							   uint8_t _flags = BGFX_VIEW_STEREO, const void* _projR = nullptr);
 
 /**/
 void set_view_order(view_id _id = 0, uint16_t _num = UINT16_MAX, const view_id* _order = nullptr);
@@ -478,12 +473,11 @@ void set_buffer(uint8_t _stage, dynamic_vertex_buffer_handle _handle, access _ac
 void set_buffer(uint8_t _stage, indirect_buffer_handle _handle, access _access);
 
 /**/
-void dispatch(view_id _id, program_handle _handle, uint32_t _numX = 1, uint32_t _numY = 1, uint32_t _numZ = 1,
-			  uint8_t _flags = BGFX_SUBMIT_EYE_FIRST);
+void dispatch(view_id _id, program_handle _handle, uint32_t _numX = 1, uint32_t _numY = 1, uint32_t _numZ = 1);
 
 /**/
 void dispatch_indirect(view_id _id, program_handle _handle, indirect_buffer_handle _indirectHandle,
-					   uint16_t _start = 0, uint16_t _num = 1, uint8_t _flags = BGFX_SUBMIT_EYE_FIRST);
+					   uint16_t _start = 0, uint16_t _num = 1);
 
 /**/
 void discard();

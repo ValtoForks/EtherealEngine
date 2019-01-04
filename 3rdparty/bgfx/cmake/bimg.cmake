@@ -9,6 +9,7 @@
 # this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 
 # Third party libs
+include( cmake/3rdparty/astc.cmake ) 
 include( cmake/3rdparty/edtaa3.cmake )
 include( cmake/3rdparty/etc1.cmake )
 include( cmake/3rdparty/etc2.cmake )
@@ -27,13 +28,13 @@ endif()
 file( GLOB BIMG_SOURCES ${BIMG_DIR}/src/*.cpp )
 
 # Create the bimg target
-add_library( bimg STATIC ${BIMG_SOURCES} )
+add_library( bimg ${BIMG_SOURCES} )
 
 # Add include directory of bimg
 target_include_directories( bimg PUBLIC ${BIMG_DIR}/include )
 
 # bimg dependencies
-target_link_libraries( bimg bx edtaa3 etc1 etc2 iqa squish nvtt pvrtc )
+target_link_libraries( bimg bx astc edtaa3 etc1 etc2 iqa squish nvtt pvrtc )
 
 # Put in a "bgfx" folder in Visual Studio
 set_target_properties( bimg PROPERTIES FOLDER "bgfx" )

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bgfx/bgfx.h"
+#include <bgfx/bgfx.h>
 #include <cstdint>
 namespace gfx
 {
@@ -25,11 +25,11 @@ enum e
 	full_precision_float = 0x2000,
 	floating_point = 0xF000,
 };
-};
+}
 
 bool is_format_supported(std::uint16_t flags, texture_format format);
 
 texture_format get_best_format(std::uint16_t type, std::uint32_t search_flags);
 
-std::uint32_t get_default_rt_sampler_flags();
+std::uint64_t get_default_rt_sampler_flags();
 }

@@ -1,29 +1,31 @@
 #include "gui_system.h"
 
-#include "core/filesystem/filesystem.h"
-#include "core/graphics/index_buffer.h"
-#include "core/graphics/render_pass.h"
-#include "core/graphics/shader.h"
-#include "core/graphics/texture.h"
-#include "core/graphics/uniform.h"
-#include "core/graphics/vertex_buffer.h"
-#include "core/logging/logging.h"
-#include "core/system/subsystem.h"
+#include <core/filesystem/filesystem.h>
+#include <core/graphics/index_buffer.h>
+#include <core/graphics/render_pass.h>
+#include <core/graphics/shader.h>
+#include <core/graphics/texture.h>
+#include <core/graphics/uniform.h>
+#include <core/graphics/vertex_buffer.h>
+#include <core/logging/logging.h>
+#include <core/serialization/associative_archive.h>
+#include <core/system/subsystem.h>
 
-#include "runtime/assets/asset_manager.h"
-#include "runtime/input/input.h"
-#include "runtime/rendering/gpu_program.h"
-#include "runtime/rendering/render_window.h"
-#include <unordered_map>
+#include <runtime/assets/asset_manager.h>
+#include <runtime/input/input.h>
+#include <runtime/rendering/gpu_program.h>
+#include <runtime/rendering/render_window.h>
 
-#include "editor_core/gui/embedded/editor_default.ttf.h"
-#include "editor_core/gui/embedded/fontawesome_webfont.ttf.h"
-#include "editor_core/gui/embedded/fs_ocornut_imgui.bin.h"
-#include "editor_core/gui/embedded/vs_ocornut_imgui.bin.h"
-#include "editor_core/gui/gui.h"
+#include <editor_core/gui/embedded/editor_default.ttf.h>
+#include <editor_core/gui/embedded/fontawesome_webfont.ttf.h>
+#include <editor_core/gui/embedded/fs_ocornut_imgui.bin.h>
+#include <editor_core/gui/embedded/vs_ocornut_imgui.bin.h>
+#include <editor_core/gui/gui.h>
 //////////////////////////////////////////////////////////////////////////
 #include "../meta/interface/gui_system.hpp"
-#include "core/serialization/associative_archive.h"
+
+#include <fstream>
+#include <unordered_map>
 namespace
 {
 const gfx::embedded_shader s_embedded_shaders[] = {BGFX_EMBEDDED_SHADER(vs_ocornut_imgui),
@@ -40,6 +42,13 @@ void render_func(ImDrawData* _draw_data)
 	{
 		return;
 	}
+	auto& io = gui::GetIO();
+	int fb_width = (int)(io.DisplaySize.x * io.DisplayFramebufferScale.x);
+	int fb_height = (int)(io.DisplaySize.y * io.DisplayFramebufferScale.y);
+	if(fb_width == 0 || fb_height == 0)
+		return;
+
+	//_draw_data->ScaleClipRects(io.DisplayFramebufferScale);
 	s_draw_calls = 0;
 	auto program = s_program.get();
 	program->begin();
@@ -160,6 +169,10 @@ void imgui_handle_event(const mml::platform_event& event)
 	{
 		io.MousePos.x = float(event.mouse_move.x);
 		io.MousePos.y = float(event.mouse_move.y);
+
+		// Scale according to framebuffer display scale
+		io.MousePos.x *= io.DisplayFramebufferScale.x;
+		io.MousePos.y *= io.DisplayFramebufferScale.y;
 	}
 
 	if(event.type == mml::platform_event::text_entered)
@@ -217,8 +230,11 @@ void imgui_set_context(ImGuiContext* context)
 	{
 		std::memcpy(&context->Style, &last_context->Style, sizeof(ImGuiStyle));
 		std::memcpy(&context->IO.KeyMap, &last_context->IO.KeyMap, sizeof(last_context->IO.KeyMap));
+		std::memcpy(&context->IO.NavInputs, &last_context->IO.NavInputs, sizeof(last_context->IO.NavInputs));
+
 		context->IO.IniFilename = last_context->IO.IniFilename;
 		context->IO.ConfigFlags = last_context->IO.ConfigFlags;
+		context->IO.BackendFlags = last_context->IO.BackendFlags;
 		context->IO.FontAllowUserScaling = last_context->IO.FontAllowUserScaling;
 		context->Initialized = last_context->Initialized;
 	}
@@ -229,18 +245,24 @@ void imgui_frame_update(render_window& window, delta_t dt)
 {
 	auto& io = gui::GetIO();
 	auto view_size = window.get_surface()->get_size();
+	auto display_w = view_size.width;
+	auto display_h = view_size.height;
 	auto window_size = window.get_size();
+	auto w = window_size[0];
+	auto h = window_size[1];
 
+	io.DisplayFramebufferScale =
+		ImVec2(w > 0 ? ((float)display_w / w) : 0, h > 0 ? ((float)display_h / h) : 0);
 	// Setup display size (every frame to accommodate for window resizing)
-	io.DisplaySize = ImVec2(static_cast<float>(view_size.width), static_cast<float>(view_size.height));
+	io.DisplaySize = ImVec2(float(w), float(h));
 	// Setup time step
 	io.DeltaTime = dt.count();
 
 	irect32_t relative_rect;
 	relative_rect.left = 0;
 	relative_rect.top = 0;
-	relative_rect.right = static_cast<std::int32_t>(window_size[0]);
-	relative_rect.bottom = static_cast<std::int32_t>(window_size[1]);
+	relative_rect.right = static_cast<std::int32_t>(w);
+	relative_rect.bottom = static_cast<std::int32_t>(h);
 	auto mouse_pos = mml::mouse::get_position(window);
 
 	if(window.has_focus() && relative_rect.contains({mouse_pos[0], mouse_pos[1]}))
@@ -270,7 +292,10 @@ void imgui_frame_update(render_window& window, delta_t dt)
 void imgui_frame_end()
 {
 	gui::End();
+	// auto old = ImGui::GetCurrentContext()->DragDropActive;
+	ImGui::GetCurrentContext()->DragDropSourceFrameCount = ImGui::GetCurrentContext()->FrameCount;
 	gui::Render();
+	// ImGui::GetCurrentContext()->DragDropActive = old;
 	render_func(gui::GetDrawData());
 }
 
@@ -300,7 +325,6 @@ void imgui_init()
 	ts.push_or_execute_on_owner_thread(
 		[](asset_handle<gfx::shader> vs, asset_handle<gfx::shader> fs) {
 			s_program = std::make_unique<gpu_program>(vs, fs);
-
 		},
 		vs_ocornut_imgui, fs_ocornut_imgui);
 
@@ -319,9 +343,9 @@ void imgui_init()
 	io.KeyMap[ImGuiKey_End] = mml::keyboard::End;
 	io.KeyMap[ImGuiKey_Insert] = mml::keyboard::Insert;
 	io.KeyMap[ImGuiKey_Delete] = mml::keyboard::Delete;
-	io.KeyMap[ImGuiKey_Backspace] = mml::keyboard::BackSpace;
+	io.KeyMap[ImGuiKey_Backspace] = mml::keyboard::Backspace;
 	io.KeyMap[ImGuiKey_Space] = mml::keyboard::Space;
-	io.KeyMap[ImGuiKey_Enter] = mml::keyboard::Return;
+	io.KeyMap[ImGuiKey_Enter] = mml::keyboard::Enter;
 	io.KeyMap[ImGuiKey_Escape] = mml::keyboard::Escape;
 	io.KeyMap[ImGuiKey_A] = mml::keyboard::A;
 	io.KeyMap[ImGuiKey_C] = mml::keyboard::C;
@@ -380,7 +404,7 @@ void imgui_dispose()
 	s_program.reset();
 	s_font_texture.reset();
 }
-}
+} // namespace
 
 gui_system::gui_system()
 {
@@ -502,8 +526,8 @@ void gui_style::set_style_colors(const hsv_setup& _setup)
 	style.Colors[ImGuiCol_FrameBgHovered] = ImVec4(col_main.x, col_main.y, col_main.z, 0.68f);
 	style.Colors[ImGuiCol_FrameBgActive] = ImVec4(col_main.x, col_main.y, col_main.z, 1.00f);
 	style.Colors[ImGuiCol_TitleBg] = ImVec4(col_main.x, col_main.y, col_main.z, 1.0f);
-	style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(col_main.x, col_main.y, col_main.z, 1.0f);
 	style.Colors[ImGuiCol_TitleBgActive] = ImVec4(col_main.x, col_main.y, col_main.z, 1.0f);
+	style.Colors[ImGuiCol_TitleBgCollapsed] = ImVec4(col_main.x, col_main.y, col_main.z, 1.0f);
 	style.Colors[ImGuiCol_MenuBarBg] = ImVec4(col_area.x, col_area.y, col_area.z, 1.0f);
 	style.Colors[ImGuiCol_ScrollbarBg] = ImVec4(col_area.x, col_area.y, col_area.z, 1.00f);
 	style.Colors[ImGuiCol_ScrollbarGrab] = ImVec4(col_main.x, col_main.y, col_main.z, 0.31f);
@@ -515,9 +539,17 @@ void gui_style::set_style_colors(const hsv_setup& _setup)
 	style.Colors[ImGuiCol_Button] = ImVec4(col_main.x, col_main.y, col_main.z, 0.44f);
 	style.Colors[ImGuiCol_ButtonHovered] = ImVec4(col_main.x, col_main.y, col_main.z, 0.86f);
 	style.Colors[ImGuiCol_ButtonActive] = ImVec4(col_main.x, col_main.y, col_main.z, 1.00f);
-	style.Colors[ImGuiCol_Header] = ImVec4(col_main.x, col_main.y, col_main.z, 0.76f);
-	style.Colors[ImGuiCol_HeaderHovered] = ImVec4(col_main.x, col_main.y, col_main.z, 0.86f);
-	style.Colors[ImGuiCol_HeaderActive] = ImVec4(col_main.x, col_main.y, col_main.z, 1.00f);
+	style.Colors[ImGuiCol_Header] = ImVec4(col_main.x, col_main.y, col_main.z, 0.46f);
+	style.Colors[ImGuiCol_HeaderActive] = ImVec4(col_main.x, col_main.y, col_main.z, 0.86f);
+	style.Colors[ImGuiCol_HeaderHovered] = ImVec4(col_main.x, col_main.y, col_main.z, 1.00f);
+	style.Colors[ImGuiCol_Separator] = ImVec4(col_main.x, col_main.y, col_main.z, 0.44f);
+	style.Colors[ImGuiCol_SeparatorHovered] = ImVec4(col_main.x, col_main.y, col_main.z, 0.86f);
+	style.Colors[ImGuiCol_SeparatorActive] = ImVec4(col_main.x, col_main.y, col_main.z, 1.00f);
+	style.Colors[ImGuiCol_Tab] = style.Colors[ImGuiCol_Header];
+	style.Colors[ImGuiCol_TabHovered] = style.Colors[ImGuiCol_HeaderHovered];
+	style.Colors[ImGuiCol_TabActive] = style.Colors[ImGuiCol_HeaderActive];
+	style.Colors[ImGuiCol_TabUnfocused] = style.Colors[ImGuiCol_Tab];
+	style.Colors[ImGuiCol_TabUnfocusedActive] = style.Colors[ImGuiCol_TabActive];
 	style.Colors[ImGuiCol_ResizeGrip] = ImVec4(col_main.x, col_main.y, col_main.z, 0.20f);
 	style.Colors[ImGuiCol_ResizeGripHovered] = ImVec4(col_main.x, col_main.y, col_main.z, 0.78f);
 	style.Colors[ImGuiCol_ResizeGripActive] = ImVec4(col_main.x, col_main.y, col_main.z, 1.00f);
@@ -526,7 +558,7 @@ void gui_style::set_style_colors(const hsv_setup& _setup)
 	style.Colors[ImGuiCol_PlotHistogram] = ImVec4(col_text.x, col_text.y, col_text.z, 0.63f);
 	style.Colors[ImGuiCol_PlotHistogramHovered] = ImVec4(col_main.x, col_main.y, col_main.z, 1.00f);
 	style.Colors[ImGuiCol_TextSelectedBg] = ImVec4(col_main.x, col_main.y, col_main.z, 0.43f);
-	style.Colors[ImGuiCol_ModalWindowDarkening] = ImVec4(0.10f, 0.10f, 0.10f, 0.55f);
+	style.Colors[ImGuiCol_NavHighlight] = style.Colors[ImGuiCol_HeaderHovered];
 }
 
 void gui_style::load_style()

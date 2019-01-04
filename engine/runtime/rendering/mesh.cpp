@@ -1,10 +1,12 @@
 #include "mesh.h"
 #include "camera.h"
-#include "core/graphics/index_buffer.h"
-#include "core/graphics/vertex_buffer.h"
-#include "core/logging/logging.h"
-#include "core/memory/checked_delete.h"
 #include "generator/generator.hpp"
+
+#include <core/graphics/index_buffer.h>
+#include <core/graphics/vertex_buffer.h>
+#include <core/logging/logging.h>
+#include <core/memory/checked_delete.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -833,9 +835,9 @@ bool mesh::add_primitives(const triangle_array_t& triangles)
 			memcpy(&v3[0], vf3, 3 * sizeof(float));
 
 			// Skip triangle if it is degenerate.
-			if((math::epsilonEqual(v1, v2, math::epsilon<float>()) == math::tvec3<bool>{true, true, true}) ||
-			   (math::epsilonEqual(v1, v3, math::epsilon<float>()) == math::tvec3<bool>{true, true, true}) ||
-			   (math::epsilonEqual(v2, v3, math::epsilon<float>()) == math::tvec3<bool>{true, true, true}))
+			if((math::equal(v1, v2, math::epsilon<float>()) == math::tvec3<bool>{true, true, true}) ||
+			   (math::equal(v1, v3, math::epsilon<float>()) == math::tvec3<bool>{true, true, true}) ||
+			   (math::equal(v2, v3, math::epsilon<float>()) == math::tvec3<bool>{true, true, true}))
 				continue;
 		} // End if has position.
 

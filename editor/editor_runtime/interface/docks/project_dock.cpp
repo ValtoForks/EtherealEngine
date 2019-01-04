@@ -1,22 +1,26 @@
 #include "project_dock.h"
 #include "../../assets/asset_extensions.h"
 #include "../../editing/editing_system.h"
-#include "core/audio/sound.h"
-#include "core/graphics/shader.h"
-#include "core/graphics/texture.h"
-#include "core/string_utils/string_utils.h"
-#include "core/system/subsystem.h"
-#include "core/tasks/task_system.h"
-#include "editor_core/nativefd/filedialog.h"
-#include "runtime/animation/animation.h"
-#include "runtime/assets/asset_manager.h"
-#include "runtime/assets/impl/asset_writer.h"
-#include "runtime/ecs/constructs/prefab.h"
-#include "runtime/ecs/constructs/scene.h"
-#include "runtime/ecs/constructs/utils.h"
-#include "runtime/ecs/ecs.h"
-#include "runtime/rendering/material.h"
-#include "runtime/rendering/mesh.h"
+
+#include <core/audio/sound.h>
+#include <core/graphics/shader.h>
+#include <core/graphics/texture.h>
+#include <core/string_utils/string_utils.h>
+#include <core/system/subsystem.h>
+#include <core/tasks/task_system.h>
+
+#include <runtime/animation/animation.h>
+#include <runtime/assets/asset_manager.h>
+#include <runtime/assets/impl/asset_writer.h>
+#include <runtime/ecs/constructs/prefab.h>
+#include <runtime/ecs/constructs/scene.h>
+#include <runtime/ecs/constructs/utils.h>
+#include <runtime/ecs/ecs.h>
+#include <runtime/rendering/material.h>
+#include <runtime/rendering/mesh.h>
+
+#include <editor_core/nativefd/filedialog.h>
+
 #include <chrono>
 
 using namespace std::literals;
@@ -99,7 +103,7 @@ static void process_drag_drop_target(const fs::path& absolute_path)
 		fs::error_code err;
 		if(fs::is_directory(absolute_path, err))
 		{
-			static const std::vector<std::vector<std::string>> types = ex::get_all_formats();
+			static const auto types = ex::get_all_formats();
 
 			const auto process_drop = [&absolute_path](const std::string& type) {
 				auto payload = gui::AcceptDragDropPayload(type.c_str());
@@ -159,7 +163,7 @@ static void process_drag_drop_target(const fs::path& absolute_path)
 	}
 }
 
-static bool draw_entry(asset_handle<gfx::texture> icon, bool is_loading, const std::string& name,
+static bool draw_entry(const asset_handle<gfx::texture>& icon, bool is_loading, const std::string& name,
 					   const fs::path& absolute_path, bool is_selected, const float size,
 					   const std::function<void()>& on_click, const std::function<void()>& on_double_click,
 					   const std::function<void(const std::string&)>& on_rename,
@@ -193,11 +197,6 @@ static bool draw_entry(asset_handle<gfx::texture> icon, bool is_loading, const s
 		}
 	}
 
-	if(gui::GetContentRegionAvailWidth() < size)
-	{
-		gui::NewLine();
-	}
-
 	ImVec2 item_size = {size, size};
 	ImVec2 texture_size = item_size;
 	if(icon)
@@ -212,7 +211,7 @@ static bool draw_entry(asset_handle<gfx::texture> icon, bool is_loading, const s
 	gui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(col.x, col.y, col.z, 0.86f));
 	gui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(col.x, col.y, col.z, 1.0f));
 
-	const int padding = 6;
+	const int padding = 0;
 	auto pos = gui::GetCursorScreenPos();
 	pos.y += item_size.y + padding * 2.0f;
 	if(gui::ImageButtonWithAspectAndTextDOWN(gui::get_info(icon), name, texture_size, item_size, uv0, uv1,
@@ -286,10 +285,15 @@ static bool draw_entry(asset_handle<gfx::texture> icon, bool is_loading, const s
 		}
 		gui::PushItemWidth(150.0f);
 		if(gui::InputText("##NAME", input_buff.data(), input_buff.size(),
-						  ImGuiInputTextFlags_EnterReturnsTrue))
+						  ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll))
 		{
 			action = entry_action::renamed;
 			gui::CloseCurrentPopup();
+		}
+
+		if(open_rename_menu)
+		{
+			gui::ActivateItem(gui::GetItemID());
 		}
 		gui::PopItemWidth();
 		gui::EndPopup();
@@ -353,7 +357,6 @@ static bool draw_entry(asset_handle<gfx::texture> icon, bool is_loading, const s
 	}
 
 	gui::PopID();
-	gui::SameLine();
 	return is_popup_opened;
 }
 
@@ -369,7 +372,7 @@ fs::path get_new_file(const fs::path& path, const std::string& name, const std::
 	return path / (string_utils::format("%s (%d)", name.c_str(), i) + ext);
 }
 
-void project_dock::render(const ImVec2& /*unused*/)
+void project_dock::render(const ImVec2& /*area*/)
 {
 	const auto root_path = fs::resolve_protocol("app:/data");
 
@@ -386,8 +389,8 @@ void project_dock::render(const ImVec2& /*unused*/)
 	}
 	gui::SameLine();
 	gui::PushItemWidth(80.0f);
-	gui::SliderFloat("", &scale_, 0.3f, 1.0f);
-	const float size = 128.0f * scale_;
+	gui::SliderFloat("", &scale_, 0.5f, 1.0f);
+	const float size = gui::GetFrameHeight() * 5.0f * scale_;
 	if(gui::IsItemHovered())
 	{
 		gui::BeginTooltip();
@@ -398,7 +401,7 @@ void project_dock::render(const ImVec2& /*unused*/)
 
 	const auto hierarchy = fs::split_until(cache_.get_path(), root_path);
 
-	int i = 0;
+	int id = 0;
 	for(const auto& dir : hierarchy)
 	{
 		gui::SameLine();
@@ -406,7 +409,7 @@ void project_dock::render(const ImVec2& /*unused*/)
 		gui::TextUnformatted("/");
 		gui::SameLine();
 
-		gui::PushID(i++);
+		gui::PushID(id++);
 		bool clicked = gui::Button(dir.filename().string().c_str());
 		gui::PopID();
 
@@ -436,20 +439,22 @@ void project_dock::render(const ImVec2& /*unused*/)
 		};
 
 		bool is_popup_opened = false;
-		for(const auto& cache_entry : cache_)
-		{
-			const auto& absolute_path = cache_entry.path();
-			auto filename = absolute_path.filename();
-			auto name = filename.string();
 
-			while(filename.has_extension())
-			{
-				filename = filename.stem();
-				name = filename.string();
-			}
+		const auto& loading_preview = es.icons["loading"];
+		const auto& folder_preview = es.icons["folder"];
+		const auto& mesh_preview = es.icons["mesh"];
+		const auto& shader_preview = es.icons["shader"];
+		const auto& material_preview = es.icons["material"];
+		const auto& animation_preview = es.icons["animation"];
+		const auto& sound_preview = es.icons["sound"];
+		const auto& prefab_preview = es.icons["prefab"];
+		const auto& scene_preview = es.icons["scene"];
 
-			const auto relative = fs::convert_to_protocol(absolute_path).generic_string();
-			const auto file_ext = absolute_path.extension().string();
+		auto process_cache_entry = [&](const auto& cache_entry) {
+			const auto& absolute_path = cache_entry.entry.path();
+			const auto& name = cache_entry.stem;
+			const auto& relative = cache_entry.protocol_path;
+			const auto& file_ext = cache_entry.extension;
 
 			const auto on_rename = [&](const std::string& new_name) {
 				fs::path new_absolute_path = absolute_path;
@@ -466,18 +471,15 @@ void project_dock::render(const ImVec2& /*unused*/)
 				es.unselect();
 			};
 
-			if(fs::is_directory(cache_entry.status()))
+			if(fs::is_directory(cache_entry.entry.status()))
 			{
 
 				using entry_t = fs::path;
-				entry_t entry = absolute_path;
-				auto icon = get_preview(entry, "folder", es);
+				const entry_t& entry = absolute_path;
+				const auto& icon = folder_preview;
 				is_popup_opened |= draw_entry(icon, false, name, absolute_path, is_selected(entry), size,
 											  [&]() // on_click
-											  {
-												  es.select(entry);
-
-											  },
+											  { es.select(entry); },
 											  [&]() // on_double_click
 											  {
 												  current_path = entry;
@@ -495,279 +497,224 @@ void project_dock::render(const ImVec2& /*unused*/)
 											  {
 												  fs::error_code err;
 												  fs::remove_all(absolute_path, err);
-
 											  });
+
+				return;
 			}
-			else
+
+			if(ex::is_format<gfx::texture>(file_ext))
 			{
-
-				bool processed = false;
-				for(const auto& ext : ex::get_suported_formats<gfx::texture>())
+				using asset_t = gfx::texture;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(relative);
+				if(entry_future.is_ready())
 				{
-					if(processed)
-					{
-						break;
-					}
-
-					if(file_ext == ext)
-					{
-						processed = true;
-						using asset_t = gfx::texture;
-						using entry_t = asset_handle<asset_t>;
-						auto entry = entry_t{};
-						auto entry_future = am.find_asset_entry<asset_t>(relative);
-						if(entry_future.is_ready())
-						{
-							entry = entry_future.get();
-						}
-						auto icon = get_preview(entry, "texture", es);
-						bool is_loading = !entry;
-						is_popup_opened |=
-							draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
-									   [&]() // on_click
-									   {
-										   es.select(entry);
-
-									   },
-									   nullptr, // on_double_click
-									   on_rename, on_delete);
-					}
+					entry = entry_future.get();
 				}
+				const auto& icon = entry ? entry : loading_preview;
+				bool is_loading = !entry;
+				is_popup_opened |= draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
+											  [&]() // on_click
+											  { es.select(entry); },
+											  nullptr, // on_double_click
+											  on_rename, on_delete);
+				return;
+			}
 
-				for(const auto& ext : ex::get_suported_formats<mesh>())
+			if(ex::is_format<mesh>(file_ext))
+			{
+				using asset_t = mesh;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(relative);
+				if(entry_future.is_ready())
 				{
-					if(processed)
-					{
-						break;
-					}
-
-					if(file_ext == ext)
-					{
-						processed = true;
-						using asset_t = mesh;
-						using entry_t = asset_handle<asset_t>;
-						auto entry = entry_t{};
-						auto entry_future = am.find_asset_entry<asset_t>(relative);
-						if(entry_future.is_ready())
-						{
-							entry = entry_future.get();
-						}
-						auto icon = get_preview(entry, "mesh", es);
-						bool is_loading = !entry;
-						is_popup_opened |=
-							draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
-									   [&]() // on_click
-									   {
-										   es.select(entry);
-
-									   },
-									   nullptr, // on_double_click
-									   on_rename, on_delete);
-					}
+					entry = entry_future.get();
 				}
+				const auto& icon = entry ? mesh_preview : loading_preview;
 
-				for(const auto& ext : ex::get_suported_formats<audio::sound>())
+				bool is_loading = !entry;
+				is_popup_opened |= draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
+											  [&]() // on_click
+											  { es.select(entry); },
+											  nullptr, // on_double_click
+											  on_rename, on_delete);
+
+				return;
+			}
+
+			if(ex::is_format<audio::sound>(file_ext))
+			{
+				using asset_t = audio::sound;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(relative);
+				if(entry_future.is_ready())
 				{
-					if(processed)
-					{
-						break;
-					}
-
-					if(file_ext == ext)
-					{
-						processed = true;
-						using asset_t = audio::sound;
-						using entry_t = asset_handle<asset_t>;
-						auto entry = entry_t{};
-						auto entry_future = am.find_asset_entry<asset_t>(relative);
-						if(entry_future.is_ready())
-						{
-							entry = entry_future.get();
-						}
-						auto icon = get_preview(entry, "sound", es);
-						bool is_loading = !entry;
-						is_popup_opened |=
-							draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
-									   [&]() // on_click
-									   {
-										   es.select(entry);
-
-									   },
-									   nullptr, // on_double_click
-									   on_rename, on_delete);
-					}
+					entry = entry_future.get();
 				}
-				for(const auto& ext : ex::get_suported_formats<gfx::shader>())
+				const auto& icon = entry ? sound_preview : loading_preview;
+				bool is_loading = !entry;
+				is_popup_opened |= draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
+											  [&]() // on_click
+											  { es.select(entry); },
+											  nullptr, // on_double_click
+											  on_rename, on_delete);
+				return;
+			}
+
+			if(ex::is_format<gfx::shader>(file_ext))
+			{
+				using asset_t = gfx::shader;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(relative);
+				if(entry_future.is_ready())
 				{
-					if(processed)
-					{
-						break;
-					}
-
-					if(file_ext == ext)
-					{
-						processed = true;
-						using asset_t = gfx::shader;
-						using entry_t = asset_handle<asset_t>;
-						auto entry = entry_t{};
-						auto entry_future = am.find_asset_entry<asset_t>(relative);
-						if(entry_future.is_ready())
-						{
-							entry = entry_future.get();
-						}
-						auto icon = get_preview(entry, "shader", es);
-						bool is_loading = !entry;
-						is_popup_opened |=
-							draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
-									   [&]() // on_click
-									   {
-										   es.select(entry);
-
-									   },
-									   nullptr, // on_double_click
-									   on_rename, on_delete);
-					}
+					entry = entry_future.get();
 				}
-				for(const auto& ext : ex::get_suported_formats<material>())
+				const auto& icon = entry ? shader_preview : loading_preview;
+				bool is_loading = !entry;
+				is_popup_opened |= draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
+											  [&]() // on_click
+											  { es.select(entry); },
+											  nullptr, // on_double_click
+											  on_rename, on_delete);
+
+				return;
+			}
+
+			if(ex::is_format<material>(file_ext))
+			{
+				using asset_t = material;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(relative);
+				if(entry_future.is_ready())
 				{
-					if(processed)
-					{
-						break;
-					}
-
-					if(file_ext == ext)
-					{
-						processed = true;
-						using asset_t = material;
-						using entry_t = asset_handle<asset_t>;
-						auto entry = entry_t{};
-						auto entry_future = am.find_asset_entry<asset_t>(relative);
-						if(entry_future.is_ready())
-						{
-							entry = entry_future.get();
-						}
-						auto icon = get_preview(entry, "material", es);
-						bool is_loading = !entry;
-						is_popup_opened |=
-							draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
-									   [&]() // on_click
-									   {
-										   es.select(entry);
-
-									   },
-									   nullptr, // on_double_click
-									   on_rename, on_delete);
-					}
+					entry = entry_future.get();
 				}
+				const auto& icon = entry ? material_preview : loading_preview;
+				bool is_loading = !entry;
+				is_popup_opened |= draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
+											  [&]() // on_click
+											  { es.select(entry); },
+											  nullptr, // on_double_click
+											  on_rename, on_delete);
 
-				for(const auto& ext : ex::get_suported_formats<runtime::animation>())
+				return;
+			}
+
+			if(ex::is_format<runtime::animation>(file_ext))
+			{
+				using asset_t = runtime::animation;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(relative);
+				if(entry_future.is_ready())
 				{
-					if(processed)
-					{
-						break;
-					}
-
-					if(file_ext == ext)
-					{
-						processed = true;
-						using asset_t = runtime::animation;
-						using entry_t = asset_handle<asset_t>;
-						auto entry = entry_t{};
-						auto entry_future = am.find_asset_entry<asset_t>(relative);
-						if(entry_future.is_ready())
-						{
-							entry = entry_future.get();
-						}
-						auto icon = get_preview(entry, "animation", es);
-						bool is_loading = !entry;
-						is_popup_opened |=
-							draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
-									   [&]() // on_click
-									   {
-										   es.select(entry);
-
-									   },
-									   nullptr, // on_double_click
-									   on_rename, on_delete);
-					}
+					entry = entry_future.get();
 				}
+				const auto& icon = entry ? animation_preview : loading_preview;
+				bool is_loading = !entry;
+				is_popup_opened |= draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
+											  [&]() // on_click
+											  { es.select(entry); },
+											  nullptr, // on_double_click
+											  on_rename, on_delete);
 
-				for(const auto& ext : ex::get_suported_formats<prefab>())
+				return;
+			}
+
+			if(ex::is_format<prefab>(file_ext))
+			{
+				using asset_t = prefab;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(relative);
+				if(entry_future.is_ready())
 				{
-					if(processed)
-					{
-						break;
-					}
-
-					if(file_ext == ext)
-					{
-						processed = true;
-						using asset_t = prefab;
-						using entry_t = asset_handle<asset_t>;
-						auto entry = entry_t{};
-						auto entry_future = am.find_asset_entry<asset_t>(relative);
-						if(entry_future.is_ready())
-						{
-							entry = entry_future.get();
-						}
-						auto icon = get_preview(entry, "prefab", es);
-						bool is_loading = !entry;
-						is_popup_opened |=
-							draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
-									   [&]() // on_click
-									   {
-										   es.select(entry);
-
-									   },
-									   nullptr, // on_double_click
-									   on_rename, on_delete);
-					}
+					entry = entry_future.get();
 				}
-				for(const auto& ext : ex::get_suported_formats<scene>())
+				const auto& icon = entry ? prefab_preview : loading_preview;
+				bool is_loading = !entry;
+				is_popup_opened |= draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
+											  [&]() // on_click
+											  { es.select(entry); },
+											  nullptr, // on_double_click
+											  on_rename, on_delete);
+
+				return;
+			}
+
+			if(ex::is_format<scene>(file_ext))
+			{
+				using asset_t = scene;
+				using entry_t = asset_handle<asset_t>;
+				auto entry = entry_t{};
+				auto entry_future = am.find_asset_entry<asset_t>(relative);
+				if(entry_future.is_ready())
 				{
-					if(processed)
+					entry = entry_future.get();
+				}
+				const auto& icon = entry ? scene_preview : loading_preview;
+				bool is_loading = !entry;
+				is_popup_opened |= draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
+											  [&]() // on_click
+											  { es.select(entry); },
+											  [&]() // on_double_click
+											  {
+												  if(!entry)
+												  {
+													  return;
+												  }
+
+												  entry->instantiate(scene::mode::standard);
+												  es.scene = fs::resolve_protocol(entry.id()).string();
+												  es.load_editor_camera();
+											  },
+											  on_rename, on_delete);
+				return;
+			}
+		};
+		gui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
+		const auto& style = gui::GetStyle();
+		auto avail = gui::GetContentRegionAvailWidth();
+		auto item_size = size + style.ItemSpacing.x;
+		auto items_per_line_exact = avail / item_size;
+		auto items_per_line_floor = ImFloor(items_per_line_exact);
+		auto count = cache_.size();
+		auto items_per_line = std::min(size_t(items_per_line_floor), count);
+		auto extra = ((items_per_line_exact - items_per_line_floor) * item_size) /
+					 std::max(1.0f, items_per_line_floor - 1);
+		auto lines = std::max<int>(1, int(ImCeil(float(count) / float(items_per_line))));
+		ImGuiListClipper clipper(lines);
+
+		while(clipper.Step())
+		{
+			for(int i = clipper.DisplayStart; i < clipper.DisplayEnd; i++)
+			{
+				auto start = size_t(i) * items_per_line;
+				auto end = start + std::min(count - start, items_per_line);
+				for(size_t j = start; j < end; ++j)
+				{
+					const auto& cache_entry = cache_[j];
+
+					gui::PushID(int(j));
+
+					process_cache_entry(cache_entry);
+
+					gui::PopID();
+
+					if(j != end - 1)
 					{
-						break;
-					}
-
-					if(file_ext == ext)
-					{
-						processed = true;
-						using asset_t = scene;
-						using entry_t = asset_handle<asset_t>;
-						auto entry = entry_t{};
-						auto entry_future = am.find_asset_entry<asset_t>(relative);
-						if(entry_future.is_ready())
-						{
-							entry = entry_future.get();
-						}
-						auto icon = get_preview(entry, "scene", es);
-						bool is_loading = !entry;
-						is_popup_opened |=
-							draw_entry(icon, is_loading, name, absolute_path, is_selected(entry), size,
-									   [&]() // on_click
-									   {
-										   es.select(entry);
-
-									   },
-									   [&]() // on_double_click
-									   {
-										   if(!entry)
-										   {
-											   return;
-										   }
-
-										   entry->instantiate(scene::mode::standard);
-										   es.scene = fs::resolve_protocol(entry.id()).string();
-										   es.load_editor_camera();
-
-									   },
-									   on_rename, on_delete);
+						ImGui::SameLine(0.0f, style.ItemSpacing.x + extra);
 					}
 				}
 			}
 		}
-
+		gui::PopStyleVar();
 		if(!is_popup_opened)
 		{
 			context_menu();
@@ -840,7 +787,7 @@ void project_dock::set_cache_path(const fs::path& path)
 		return;
 	}
 	cache_.set_path(path);
-	cache_path_with_protocol_ = fs::convert_to_protocol(path).generic();
+	cache_path_with_protocol_ = fs::convert_to_protocol(path).generic_string();
 }
 
 void project_dock::import()
@@ -859,7 +806,7 @@ void project_dock::import()
 				[opened = cache_.get_path()](const fs::path& path, const fs::path& filename) {
 					fs::error_code err;
 					fs::path dir = opened / filename;
-					fs::copy_file(path, dir, fs::copy_options::overwrite_if_exists, err);
+					fs::copy_file(path, dir, fs::copy_options::overwrite_existing, err);
 				},
 				p, filename);
 		}

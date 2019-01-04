@@ -2,9 +2,10 @@
 
 #include "../../assets/asset_handle.h"
 #include "../ecs.h"
-#include "core/audio/source.h"
-#include "core/common/basetypes.hpp"
-#include "core/math/math_includes.h"
+
+#include <core/audio/source.h>
+#include <core/common/basetypes.hpp>
+#include <core/math/math_includes.h>
 
 //-----------------------------------------------------------------------------
 // Main Class Declarations
@@ -52,9 +53,9 @@ public:
 	float get_volume_rolloff() const;
 	const frange_t& get_range() const;
 
-	void set_playing_offset(audio::sound_info::seconds_t offset);
-	audio::sound_info::seconds_t get_playing_offset() const;
-	audio::sound_info::seconds_t get_playing_duration() const;
+	void set_playing_offset(audio::sound_info::duration_t offset);
+	audio::sound_info::duration_t get_playing_offset() const;
+	audio::sound_info::duration_t get_playing_duration() const;
 
 	void play();
 	void stop();

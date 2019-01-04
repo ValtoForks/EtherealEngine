@@ -200,12 +200,6 @@ void window::set_size(const std::array<std::uint32_t, 2>& size)
         if(_size[0] != size[0] || _size[1] != size[1])
         {
             _impl->set_size(size);
-    
-            // Cache the new size
-            _size = size;
-    
-            // Notify the derived class
-            on_resize();
         }
     }
 }
@@ -325,13 +319,13 @@ bool window::has_focus() const
 
 
 ////////////////////////////////////////////////////////////
-window_handle window::get_system_handle() const
+window_handle window::native_handle() const
 {
-    return _impl ? _impl->get_system_handle() : 0;
+    return _impl ? _impl->native_handle() : window_handle{};
 }
-void* window::get_system_handle_specific() const
+void* window::native_display_handle() const
 {
-    return _impl ? _impl->get_system_handle_specific() : 0;
+    return _impl ? _impl->native_display_handle() : nullptr;
 }
 ////////////////////////////////////////////////////////////
 void window::on_create()

@@ -2,30 +2,32 @@
 #include "asset_extensions.h"
 #include "mesh_importer.h"
 
-#include "bx/error.h"
-#include "bx/process.h"
-#include "bx/string.h"
-#include "core/audio/loaders/loader.h"
-#include "core/audio/sound.h"
-#include "core/filesystem/filesystem.h"
-#include "core/graphics/graphics.h"
-#include "core/graphics/shader.h"
-#include "core/graphics/texture.h"
-#include "core/logging/logging.h"
-#include "core/serialization/associative_archive.h"
-#include "core/serialization/binary_archive.h"
-#include "core/serialization/serialization.h"
-#include "core/serialization/types/map.hpp"
-#include "core/serialization/types/unordered_map.hpp"
-#include "core/serialization/types/vector.hpp"
-#include "core/string_utils/string_utils.h"
-#include "core/uuid/uuid.hpp"
-#include "runtime/ecs/constructs/prefab.h"
-#include "runtime/ecs/constructs/scene.h"
-#include "runtime/meta/animation/animation.hpp"
-#include "runtime/meta/audio/sound.hpp"
-#include "runtime/meta/rendering/material.hpp"
-#include "runtime/meta/rendering/mesh.hpp"
+#include <bx/error.h>
+#include <bx/process.h>
+#include <bx/string.h>
+
+#include <core/audio/loaders/loader.h>
+#include <core/audio/sound.h>
+#include <core/filesystem/filesystem.h>
+#include <core/graphics/graphics.h>
+#include <core/graphics/shader.h>
+#include <core/graphics/texture.h>
+#include <core/logging/logging.h>
+#include <core/serialization/associative_archive.h>
+#include <core/serialization/binary_archive.h>
+#include <core/serialization/serialization.h>
+#include <core/serialization/types/map.hpp>
+#include <core/serialization/types/unordered_map.hpp>
+#include <core/serialization/types/vector.hpp>
+#include <core/string_utils/string_utils.h>
+#include <core/uuid/uuid.hpp>
+
+#include <runtime/ecs/constructs/prefab.h>
+#include <runtime/ecs/constructs/scene.h>
+#include <runtime/meta/animation/animation.hpp>
+#include <runtime/meta/audio/sound.hpp>
+#include <runtime/meta/rendering/material.hpp>
+#include <runtime/meta/rendering/mesh.hpp>
 
 #include <array>
 #include <fstream>
@@ -179,7 +181,7 @@ void compile<gfx::shader>(const fs::path& absolute_meta_key, const fs::path& out
 	else
 	{
 		APPLOG_INFO("Successful compilation of {0}", str_input);
-		fs::copy_file(temp, output, fs::copy_options::overwrite_if_exists, err);
+		fs::copy_file(temp, output, fs::copy_options::overwrite_existing, err);
 	}
 	fs::remove(temp, err);
 }
@@ -216,7 +218,7 @@ void compile<gfx::texture>(const fs::path& absolute_meta_key, const fs::path& ou
 	else
 	{
 		APPLOG_INFO("Successful compilation of {0}", str_input);
-		fs::copy_file(temp, output, fs::copy_options::overwrite_if_exists, err);
+		fs::copy_file(temp, output, fs::copy_options::overwrite_existing, err);
 	}
 	fs::remove(temp, err);
 }
@@ -248,7 +250,7 @@ void compile<mesh>(const fs::path& absolute_meta_key, const fs::path& output)
 			cereal::oarchive_binary_t ar(soutput);
 			try_save(ar, cereal::make_nvp("mesh", data));
 		}
-		fs::copy_file(temp, output, fs::copy_options::overwrite_if_exists, err);
+		fs::copy_file(temp, output, fs::copy_options::overwrite_existing, err);
 		fs::remove(temp, err);
 
 		APPLOG_INFO("Successful compilation of {0}", str_input);
@@ -268,7 +270,7 @@ void compile<mesh>(const fs::path& absolute_meta_key, const fs::path& output)
 			}
 			fs::path anim_output = (dir / file).string() + "_" + animation.name + ".anim";
 
-			fs::copy_file(temp, anim_output, fs::copy_options::overwrite_if_exists, err);
+			fs::copy_file(temp, anim_output, fs::copy_options::overwrite_existing, err);
 			fs::remove(temp, err);
 
 			APPLOG_INFO("Successful compilation of animation {0}", animation.name);
@@ -368,7 +370,7 @@ void compile<audio::sound>(const fs::path& absolute_meta_key, const fs::path& ou
 		cereal::oarchive_binary_t ar(soutput);
 		try_save(ar, cereal::make_nvp("sound", data));
 	}
-	fs::copy_file(temp, output, fs::copy_options::overwrite_if_exists, err);
+	fs::copy_file(temp, output, fs::copy_options::overwrite_existing, err);
 	fs::remove(temp, err);
 
 	APPLOG_INFO("Successful compilation of {0}", str_input);
@@ -415,7 +417,7 @@ void compile<prefab>(const fs::path& absolute_meta_key, const fs::path& output)
 	fs::path absolute_key = fs::convert_to_protocol(absolute_meta_key);
 	absolute_key = fs::resolve_protocol(fs::replace(absolute_key, ":/meta", ":/data"));
 	absolute_key.replace_extension();
-	fs::copy_file(absolute_key, output, fs::copy_options::overwrite_if_exists, err);
+	fs::copy_file(absolute_key, output, fs::copy_options::overwrite_existing, err);
 	APPLOG_INFO("Successful compilation of {0}", absolute_key.string());
 }
 
@@ -426,7 +428,7 @@ void compile<scene>(const fs::path& absolute_meta_key, const fs::path& output)
 	fs::path absolute_key = fs::convert_to_protocol(absolute_meta_key);
 	absolute_key = fs::resolve_protocol(fs::replace(absolute_key, ":/meta", ":/data"));
 	absolute_key.replace_extension();
-	fs::copy_file(absolute_key, output, fs::copy_options::overwrite_if_exists, err);
+	fs::copy_file(absolute_key, output, fs::copy_options::overwrite_existing, err);
 	APPLOG_INFO("Successful compilation of {0}", absolute_key.string());
 }
 }
